@@ -1,0 +1,13 @@
+[
+    {"cityname": "Longyearbyen", "lat":78.212903,"lon":15.573179, "lat_n":1, "lon_n":1 },
+    {"cityname": "Oslo", "lat":59.905087,"lon":10.680369, "lat_n":1, "lon_n":1 },
+    {"cityname": "Andorra", "lat":42.504310,"lon":1.521091, "lat_n":1, "lon_n":1 },
+    {"cityname": "Mumbai", "lat":19.041592,"lon":72.855905, "lat_n":1, "lon_n":1 },
+    {"cityname": "Pokhara", "lat":28.222097,"lon":83.999690, "lat_n":1, "lon_n":1 },
+    {"cityname": "Munich", "lat":48.145056,"lon":11.572591, "lat_n":1, "lon_n":1 },
+    {"cityname": "Beirut", "lat":33.870684,"lon":35.549461, "lat_n":1, "lon_n":1 },
+    {"cityname": "Assuan", "lat":24.081672,"lon":32.892077, "lat_n":1, "lon_n":1 },
+    {"cityname": "Agadez", "lat":16.971000,"lon":7.978833, "lat_n":1, "lon_n":1 },
+    {"cityname": "Chongqing", "lat":29.588978,"lon":106.507504, "lat_n":1, "lon_n":1 },
+    {"cityname": "Surgut", "lat":61.259775,"lon":73.399367, "lat_n":1, "lon_n":1 }
+]

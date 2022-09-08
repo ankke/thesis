@@ -31,8 +31,10 @@ code_root/
 
 After downloading the dataset run the following script to preprocess and prepare the data for training
 ```
-python generate_data.py
+python generate_data.py configs/cities.json global_diverse_cities
 ```
+
+The set-name (e.g. 'global_diverse_cities') will be the name for the data folder. The files must be in the form '<Cityname>_region_<id>_<rest>' where rest can be one of ['refine_gt_graph.p', 'gt.png', 'sat.png'].
 
 ## 2. Training
 

@@ -5,28 +5,34 @@ import json
 from argparse import ArgumentParser
 import numpy as np
 
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 parser = ArgumentParser()
 parser.add_argument('--config',
                     default=None,
                     help='config file (.yml) containing the hyper-parameters for training. '
                          'If None, use the nnU-Net config. See /config for examples.')
-parser.add_argument('--resume', default=None, help='checkpoint of the last epoch of the model')
-parser.add_argument('--seg_net', default=None, help='checkpoint of the segmentation model')
+parser.add_argument('--resume', default=None,
+                    help='checkpoint of the last epoch of the model')
+parser.add_argument('--seg_net', default=None,
+                    help='checkpoint of the segmentation model')
 parser.add_argument('--device', default='cuda',
-                        help='device to use for training')
-parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0,1],
-                        help='list of index where skip conn will be made')
+                    help='device to use for training')
+parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0, 1],
+                    help='list of index where skip conn will be made')
 
 
 class obj:
     def __init__(self, dict1):
         self.__dict__.update(dict1)
-        
+
+
 def dict2obj(dict1):
     return json.loads(json.dumps(dict1), object_hook=obj)
 
+
 def main(args):
-    
+
     # Load the config files
     with open(args.config) as f:
         print('\n*** Config file')
@@ -34,9 +40,11 @@ def main(args):
         config = yaml.load(f, Loader=yaml.FullLoader)
         print(config['log']['message'])
     config = dict2obj(config)
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, args.cuda_visible_device))
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
+        map(str, args.cuda_visible_device))
 
-    exp_path = os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED))
+    exp_path = os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
+        config.log.exp_name, config.DATA.SEED))
     if os.path.exists(exp_path) and args.resume == None:
         print('ERROR: Experiment folder exist, please change exp name in config file')
     else:
@@ -64,7 +72,8 @@ def main(args):
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.enabled = True
     torch.multiprocessing.set_sharing_strategy('file_system')
-    device = torch.device("cuda") if args.device=='cuda' else torch.device("cpu")
+    device = torch.device(
+        "cuda") if args.device == 'cuda' else torch.device("cpu")
 
     net = build_model(config).to(device)
 
@@ -78,11 +87,11 @@ def main(args):
     )
 
     train_loader = DataLoader(train_ds,
-                            batch_size=config.DATA.BATCH_SIZE,
-                            shuffle=True,
-                            num_workers=config.DATA.NUM_WORKERS,
-                            collate_fn=image_graph_collate_road_network,
-                            pin_memory=True)
+                              batch_size=config.DATA.BATCH_SIZE,
+                              shuffle=True,
+                              num_workers=config.DATA.NUM_WORKERS,
+                              collate_fn=image_graph_collate_road_network,
+                              pin_memory=True)
 
     val_loader = DataLoader(val_ds,
                             batch_size=config.DATA.BATCH_SIZE,
@@ -112,8 +121,9 @@ def main(args):
         param_dicts, lr=float(config.TRAIN.LR), weight_decay=float(config.TRAIN.WEIGHT_DECAY)
     )
 
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, config.TRAIN.LR_DROP)
-    
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, config.TRAIN.LR_DROP)
+
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
         net.load_state_dict(checkpoint['net'])
@@ -121,7 +131,7 @@ def main(args):
         scheduler.load_state_dict(checkpoint['scheduler'])
         last_epoch = scheduler.last_epoch
         scheduler.step_size = config.TRAIN.LR_DROP
-        
+
     if args.seg_net:
         checkpoint = torch.load(args.seg_net, map_location='cpu')
         seg_net.load_state_dict(checkpoint['net'])
@@ -135,7 +145,8 @@ def main(args):
         #     param.requires_grad = False
 
     writer = SummaryWriter(
-        log_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED)),
+        log_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
+            config.log.exp_name, config.DATA.SEED)),
     )
 
     evaluator = build_evaluator(
@@ -166,7 +177,8 @@ def main(args):
         trainer.state.iteration = trainer.state.epoch_length * last_epoch
 
     pbar = ProgressBar()
-    pbar.attach(trainer, output_transform= lambda x: {'loss': x["loss"]["total"]})
+    pbar.attach(trainer, output_transform=lambda x: {
+                'loss': x["loss"]["total"]})
     # logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     trainer.run()
 
@@ -185,5 +197,5 @@ if __name__ == '__main__':
 
     import torch.multiprocessing
     torch.multiprocessing.set_sharing_strategy('file_system')
-    
+
     main(args)
