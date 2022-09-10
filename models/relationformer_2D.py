@@ -17,10 +17,10 @@ from .utils import nested_tensor_from_tensor_list, NestedTensor, inverse_sigmoid
 class RelationFormer(nn.Module):
     """ This is the RelationFormer module that performs object detection """
 
-    def __init__(self, encoder, decoder, config):
+    def __init__(self, backbone, deformable_transformer, config):
         super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
+        self.backbone = backbone
+        self.deformable_transformer = deformable_transformer
         self.config = config
 
         self.num_queries = config.MODEL.DECODER.OBJ_TOKEN + config.MODEL.DECODER.RLN_TOKEN + config.MODEL.DECODER.DUMMY_TOKEN
@@ -44,10 +44,10 @@ class RelationFormer(nn.Module):
         if not self.two_stage:
             self.query_embed = nn.Embedding(self.num_queries, self.hidden_dim*2)    # why *2
         if self.num_feature_levels > 1:
-            num_backbone_outs = len(self.encoder.strides)
+            num_backbone_outs = len(backbone.strides)
             input_proj_list = []
             for _ in range(num_backbone_outs):
-                in_channels = self.encoder.num_channels[_]
+                in_channels = self.backbone.num_channels[_]
                 input_proj_list.append(nn.Sequential(
                     nn.Conv2d(in_channels, self.hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, self.hidden_dim),
@@ -62,11 +62,11 @@ class RelationFormer(nn.Module):
         else:
             self.input_proj = nn.ModuleList([
                 nn.Sequential(
-                    nn.Conv2d(self.encoder.num_channels[0], self.hidden_dim, kernel_size=1),
+                    nn.Conv2d(self.backbone.num_channels[0], self.hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, self.hidden_dim),
                 )])
 
-        self.decoder.decoder.bbox_embed = None
+        self.deformable_transformer.decoder.bbox_embed = None
 
 
     def forward(self, samples, seg=True):
@@ -75,12 +75,14 @@ class RelationFormer(nn.Module):
         elif seg:
             samples = nested_tensor_from_tensor_list([tensor.expand(3, -1, -1).contiguous() for tensor in samples])
         # Deformable Transformer backbone
-        features, pos = self.encoder(samples)
+        features, pos = self.backbone(samples)
         
         # Create 
         srcs = []
         masks = []
+        # For each different input feature level (l=level)
         for l, feat in enumerate(features):
+            # Get the feature itself and the corresponding mask
             src, mask = feat.decompose()
             srcs.append(self.input_proj[l](src))
             masks.append(mask)
@@ -95,7 +97,7 @@ class RelationFormer(nn.Module):
                     src = self.input_proj[l](srcs[-1])
                 m = samples.mask
                 mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
-                pos_l = self.encoder[1](NestedTensor(src, mask)).to(src.dtype)
+                pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
                 srcs.append(src)
                 masks.append(mask)
                 pos.append(pos_l)
@@ -104,7 +106,7 @@ class RelationFormer(nn.Module):
         if not self.two_stage:
             query_embeds = self.query_embed.weight
     
-        hs, init_reference, inter_references, _, _ = self.decoder(
+        hs, init_reference, inter_references, _, _ = self.deformable_transformer(
             srcs, masks, query_embeds, pos
         )
 
@@ -136,14 +138,16 @@ class MLP(nn.Module):
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
+
 def build_relationformer(config, **kwargs):
 
-    encoder = build_backbone(config)
-    decoder = build_deforamble_transformer(config)
+    # Backbone consists of actual Backbone followed by positional embedding
+    backbone = build_backbone(config)
+    deformable_transformer = build_deforamble_transformer(config)
 
     model = RelationFormer(
-        encoder,
-        decoder,
+        backbone,
+        deformable_transformer,
         config,
         **kwargs
     )
