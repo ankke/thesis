@@ -277,9 +277,9 @@ if __name__ == "__main__":
     for item in dataset_cfg_:
         city_names.append(item["cityname"])
 
-    set_name = sys.argv[1]
+    set_name = sys.argv[2]
 
-    root_dir = "./data/%s/" % set_name
+    root_dir = "./data/%s" % set_name
 
     image_id = 1
     train_path = './data/%s/train_data/' % set_name
@@ -349,6 +349,8 @@ if __name__ == "__main__":
                          (city_names[ind], ind))
         vtk_files.append(
             root_dir + "/%s_region_%d_refine_gt_graph.p" % (city_names[ind], ind))
+
+    print(raw_files)
 
     for ind in range(len(raw_files)):
         print(ind)

@@ -19,8 +19,8 @@ class RelationFormer(nn.Module):
 
     def __init__(self, backbone, deformable_transformer, config):
         super().__init__()
-        self.backbone = backbone
-        self.deformable_transformer = deformable_transformer
+        self.encoder = backbone
+        self.decoder = deformable_transformer
         self.config = config
 
         self.num_queries = config.MODEL.DECODER.OBJ_TOKEN + config.MODEL.DECODER.RLN_TOKEN + config.MODEL.DECODER.DUMMY_TOKEN
@@ -47,7 +47,7 @@ class RelationFormer(nn.Module):
             num_backbone_outs = len(backbone.strides)
             input_proj_list = []
             for _ in range(num_backbone_outs):
-                in_channels = self.backbone.num_channels[_]
+                in_channels = self.encoder.num_channels[_]
                 input_proj_list.append(nn.Sequential(
                     nn.Conv2d(in_channels, self.hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, self.hidden_dim),
@@ -62,11 +62,11 @@ class RelationFormer(nn.Module):
         else:
             self.input_proj = nn.ModuleList([
                 nn.Sequential(
-                    nn.Conv2d(self.backbone.num_channels[0], self.hidden_dim, kernel_size=1),
+                    nn.Conv2d(self.encoder.num_channels[0], self.hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, self.hidden_dim),
                 )])
 
-        self.deformable_transformer.decoder.bbox_embed = None
+        self.decoder.decoder.bbox_embed = None
 
 
     def forward(self, samples, seg=True):
@@ -75,7 +75,7 @@ class RelationFormer(nn.Module):
         elif seg:
             samples = nested_tensor_from_tensor_list([tensor.expand(3, -1, -1).contiguous() for tensor in samples])
         # Deformable Transformer backbone
-        features, pos = self.backbone(samples)
+        features, pos = self.encoder(samples)
         
         # Create 
         srcs = []
@@ -97,7 +97,7 @@ class RelationFormer(nn.Module):
                     src = self.input_proj[l](srcs[-1])
                 m = samples.mask
                 mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
-                pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
+                pos_l = self.encoder[1](NestedTensor(src, mask)).to(src.dtype)
                 srcs.append(src)
                 masks.append(mask)
                 pos.append(pos_l)
@@ -106,7 +106,7 @@ class RelationFormer(nn.Module):
         if not self.two_stage:
             query_embeds = self.query_embed.weight
     
-        hs, init_reference, inter_references, _, _ = self.deformable_transformer(
+        hs, init_reference, inter_references, _, _ = self.decoder(
             srcs, masks, query_embeds, pos
         )
 
