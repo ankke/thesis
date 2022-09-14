@@ -10,6 +10,7 @@ import sys
 import json
 import yaml
 from argparse import ArgumentParser
+from utils import dict2obj, obj
 
 patch_size = [128, 128, 1]
 pad = [5, 5, 0]
@@ -250,13 +251,6 @@ def prune_patch(patch_coord_list, patch_edge_list):
         mod_patch_edge_list.append(new_edge)
 
     return mod_patch_coord_list, mod_patch_edge_list
-
-class obj:
-    def __init__(self, dict1):
-        self.__dict__.update(dict1)
-
-def dict2obj(dict1):
-    return json.loads(json.dumps(dict1), object_hook=obj)
 
 #indrange_test = range(10)
 #indrange_train = []

@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import logging
 import pyvista
-from skimage import measure
+import json
 
 
 def get_total_grad_norm(parameters, norm_type=2):
@@ -145,3 +145,10 @@ def Bresenham3D(p1, p2):
             p2 += 2 * dx
             ListOfPoints.append((x1, y1, z1))
     return ListOfPoints
+
+class obj:
+    def __init__(self, dict1):
+        self.__dict__.update(dict1)
+
+def dict2obj(dict1):
+    return json.loads(json.dumps(dict1), object_hook=obj)
