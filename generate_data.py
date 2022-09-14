@@ -8,6 +8,8 @@ import random
 import os
 import sys
 import json
+import yaml
+from argparse import ArgumentParser
 
 patch_size = [128, 128, 1]
 pad = [5, 5, 0]
@@ -249,45 +251,89 @@ def prune_patch(patch_coord_list, patch_edge_list):
 
     return mod_patch_coord_list, mod_patch_edge_list
 
+class obj:
+    def __init__(self, dict1):
+        self.__dict__.update(dict1)
 
-indrange_train = []
-indrange_test = []
+def dict2obj(dict1):
+    return json.loads(json.dumps(dict1), object_hook=obj)
 
-for x in range(180):
-    if x % 10 < 8:
-        indrange_train.append(x)
+#indrange_test = range(10)
+#indrange_train = []
 
-    if x % 10 == 9:
-        indrange_test.append(x)
+parser = ArgumentParser()
+parser.add_argument('--config',
+                    default=None,
+                    required=True,
+                    help='config file (.yml) containing the hyper-parameters for data. '
+                         'Should be the same as for training/testing. See /config for examples.')
+parser.add_argument('--source',
+                    default=None,
+                    required=True,
+                    help='Path to source directory')
+parser.add_argument('--target',
+                    default=None,
+                    required=True,
+                    help='Path to target directory')
+parser.add_argument('--source_number',
+                    default=None,
+                    type=int,
+                    required=True,
+                    help='Number of images in source directory')
+parser.add_argument('--split',
+                    default=0.8,
+                    type=float,
+                    help='Train/Test split. 0.8 means 80% of the data will be training data and 20% testing data'
+                        'Default: 0.8')
+parser.add_argument('--city_names',
+                    default=None,
+                    required=False,
+                    help='Path to json with city names that are prefixing the raw source images')
 
-    if x % 20 == 18:
-        indrange_train.append(x)
+image_id = 1
 
-    if x % 20 == 8:
-        indrange_test.append(x)
+def generate_data(args):
+    global image_id
 
-indrange_test = range(10)
-indrange_train = []
-print("id range: %s" % indrange_test)
+    root_dir = args.source
+    target_dir = args.target
+    amount_images = args.source_number
+    split = args.split
 
-if __name__ == "__main__":
-    city_names = []
+    # Load the config files
+    with open(args.config) as f:
+        print('\n*** Config file')
+        print(args.config)
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        print(config['log']['message'])
+    config = dict2obj(config)
 
-    dataset_cfg_ = json.load(open(sys.argv[1], "r"))
-    for item in dataset_cfg_:
-        city_names.append(item["cityname"])
+    # If data has prefix with city names, a json with all names must be provided
+    cities = []
+    if args.city_names is not None:
+        dataset_cfg_ = json.load(open(args.city_names, "r"))
+        for item in dataset_cfg_:
+            cities.append({"name": item["cityname"], "id": item["id"]})
 
-    set_name = sys.argv[2]
+    # Sets the seed for reproducibility
+    random.seed(config.DATA.SEED)
 
-    root_dir = "./data/%s" % set_name
+    indrange_train = []
+    indrange_test = []
+
+    for x in range(amount_images):
+        if random.random() <= split:
+            indrange_train.append(x)
+        else:
+            indrange_test.append(x)
 
     image_id = 1
-    train_path = './data/%s/train_data/' % set_name
+    train_path = f"{target_dir}/train_data/"
     if not os.path.isdir(train_path):
         os.makedirs(train_path)
-        os.makedirs(train_path+'/seg')
-        os.makedirs(train_path+'/vtp')
-        os.makedirs(train_path+'/raw')
+        os.makedirs(train_path + '/seg')
+        os.makedirs(train_path + '/vtp')
+        os.makedirs(train_path + '/raw')
     else:
         raise Exception("Train folder is non-empty")
     print('Preparing Train Data')
@@ -297,20 +343,19 @@ if __name__ == "__main__":
     vtk_files = []
 
     for ind in indrange_train:
-        print(ind)
-        raw_files.append(root_dir + "/%s_region_%d_sat" %
-                         (city_names[ind], ind))
-        seg_files.append(root_dir + "/%s_region_%d_gt.png" %
-                         (city_names[ind], ind))
-        vtk_files.append(
-            root_dir + "/%s_region_%d_refine_gt_graph.p" % (city_names[ind], ind))
+        # If data is prefixed with city name, add this to the filenames
+        file_prefix = \
+            f"{root_dir}/{cities[ind]['name']}_region_{cities[ind]['id']}_" if len(cities) > 0 else f"{root_dir}/region_{ind}_"
+        raw_files.append(f"{file_prefix}sat")
+        seg_files.append(f"{file_prefix}gt.png")
+        vtk_files.append(f"{file_prefix}refine_gt_graph.p")
 
     for ind in range(len(raw_files)):
         print(ind)
         try:
-            sat_img = imageio.imread(raw_files[ind]+".png")
+            sat_img = imageio.imread(raw_files[ind] + ".png")
         except:
-            sat_img = imageio.imread(raw_files[ind]+".jpg")
+            sat_img = imageio.imread(raw_files[ind] + ".jpg")
 
         with open(vtk_files[ind], 'rb') as f:
             graph = pickle.load(f)
@@ -321,18 +366,18 @@ if __name__ == "__main__":
             (node_array, np.int32(np.zeros((node_array.shape[0], 1)))), 1)
         mesh = pyvista.PolyData(patch_coord)
         patch_edge = np.concatenate(
-            (np.int32(2*np.ones((edge_array.shape[0], 1))), edge_array), 1)
+            (np.int32(2 * np.ones((edge_array.shape[0], 1))), edge_array), 1)
         mesh.lines = patch_edge.flatten()
 
         patch_extract(train_path, sat_img, gt_seg, mesh)
 
     image_id = 1
-    test_path = './data/%s/test_data/' % set_name
+    test_path = f"{target_dir}/test_data/"
     if not os.path.isdir(test_path):
         os.makedirs(test_path)
-        os.makedirs(test_path+'/seg')
-        os.makedirs(test_path+'/vtp')
-        os.makedirs(test_path+'/raw')
+        os.makedirs(test_path + '/seg')
+        os.makedirs(test_path + '/vtp')
+        os.makedirs(test_path + '/raw')
     else:
         raise Exception("Test folder is non-empty")
 
@@ -343,21 +388,19 @@ if __name__ == "__main__":
     vtk_files = []
 
     for ind in indrange_test:
-        raw_files.append(root_dir + "/%s_region_%d_sat" %
-                         (city_names[ind], ind))
-        seg_files.append(root_dir + "/%s_region_%d_gt.png" %
-                         (city_names[ind], ind))
-        vtk_files.append(
-            root_dir + "/%s_region_%d_refine_gt_graph.p" % (city_names[ind], ind))
-
-    print(raw_files)
+        # If data is prefixed with city name, add this to the filenames
+        file_prefix = \
+            f"{root_dir}/{cities[ind]['name']}_region_{cities[ind]['id']}_" if len(cities) > 0 else f"{root_dir}/region_{ind}_"
+        raw_files.append(f"{file_prefix}sat")
+        seg_files.append(f"{file_prefix}gt.png")
+        vtk_files.append(f"{file_prefix}refine_gt_graph.p")
 
     for ind in range(len(raw_files)):
         print(ind)
         try:
-            sat_img = imageio.imread(raw_files[ind]+".png")
+            sat_img = imageio.imread(raw_files[ind] + ".png")
         except:
-            sat_img = imageio.imread(raw_files[ind]+".jpg")
+            sat_img = imageio.imread(raw_files[ind] + ".jpg")
 
         with open(vtk_files[ind], 'rb') as f:
             graph = pickle.load(f)
@@ -368,7 +411,13 @@ if __name__ == "__main__":
             (node_array, np.int32(np.zeros((node_array.shape[0], 1)))), 1)
         mesh = pyvista.PolyData(patch_coord)
         patch_edge = np.concatenate(
-            (np.int32(2*np.ones((edge_array.shape[0], 1))), edge_array), 1)
+            (np.int32(2 * np.ones((edge_array.shape[0], 1))), edge_array), 1)
         mesh.lines = patch_edge.flatten()
 
         patch_extract(test_path, sat_img, gt_seg, mesh)
+
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    generate_data(args)
+

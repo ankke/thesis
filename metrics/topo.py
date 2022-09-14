@@ -46,7 +46,7 @@ def compute_topo(points, edges, pred_points, pred_edges, img_size=128):
     if lat_top_left - min_lat < 0.01000:
         r = 0.00150 # around 150 meters
 
-    topoResult =  TOPOWithPairs(graph_prop, graph_gt, lmap, losm, r =r, step = 0.00005, threshold = 0.00010, one2oneMatching = True, metaData = None)
+    topoResult = TOPOWithPairs(graph_prop, graph_gt, lmap, losm, r =r, step = 0.00005, threshold = 0.00010, one2oneMatching = True, metaData = None)
     
     return topoResult
 
