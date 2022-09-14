@@ -9,5 +9,6 @@
     {"cityname": "Assuan", "lat":24.081672,"lon":32.892077, "lat_n":1, "lon_n":1 },
     {"cityname": "Agadez", "lat":16.971000,"lon":7.978833, "lat_n":1, "lon_n":1 },
     {"cityname": "Chongqing", "lat":29.588978,"lon":106.507504, "lat_n":1, "lon_n":1 },
-    {"cityname": "Surgut", "lat":61.259775,"lon":73.399367, "lat_n":1, "lon_n":1 }
+    {"cityname": "Surgut", "lat":61.259775,"lon":73.399367, "lat_n":1, "lon_n":1 },
+    {"cityname": "Nashville", "lat":36.167629,"lon":-86.772714, "lat_n":1, "lon_n":1 }
 ]
