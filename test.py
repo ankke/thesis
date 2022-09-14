@@ -86,7 +86,7 @@ def test(args):
                             pin_memory=True)
 
     # load checkpoint
-    checkpoint = torch.load(args.checkpoint, map_location='cpu')
+    checkpoint = torch.load(args.checkpoint, map_location=device)
     net.load_state_dict(checkpoint['net'])
     net.eval()
 
@@ -209,6 +209,8 @@ def test(args):
     print(f"edge AR_IoU_0.80_MaxDet_100 {edge_metric_scores['AR_IoU_0.80_MaxDet_100']}")
     print(f"edge AR_IoU_0.90_MaxDet_100 {edge_metric_scores['AR_IoU_0.90_MaxDet_100']}\n")
 
+
 if __name__ == '__main__':
     args = parser.parse_args()
     test(args)
+
