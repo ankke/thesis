@@ -1,4 +1,7 @@
 setup.py
+/home/alex_johannes/relationformer/models/ops/src/vision.cpp
+/home/alex_johannes/relationformer/models/ops/src/cpu/ms_deform_attn_cpu.cpp
+/home/alex_johannes/relationformer/models/ops/src/cuda/ms_deform_attn_cuda.cu
 /home/bran/alex_johannes/relationformer/models/ops/src/vision.cpp
 /home/bran/alex_johannes/relationformer/models/ops/src/cpu/ms_deform_attn_cpu.cpp
 /home/bran/alex_johannes/relationformer/models/ops/src/cuda/ms_deform_attn_cuda.cu
