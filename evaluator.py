@@ -107,7 +107,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         gc.collect()
         torch.cuda.empty_cache()
         
-        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes":pred_nodes, "pred_edges":pred_edges}
+        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges}
 
 
 def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device):
@@ -147,7 +147,7 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
     # )
 
     evaluator = RelationformerEvaluator(
-        config= config,
+        config=config,
         device=device,
         val_data_loader=val_loader,
         network=net,

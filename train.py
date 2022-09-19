@@ -5,8 +5,6 @@ import json
 from argparse import ArgumentParser
 import numpy as np
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
 parser = ArgumentParser()
 parser.add_argument('--config',
                     default=None,
@@ -72,8 +70,7 @@ def main(args):
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.enabled = True
     torch.multiprocessing.set_sharing_strategy('file_system')
-    device = torch.device(
-        "cuda") if args.device == 'cuda' else torch.device("cpu")
+    device = torch.device("cuda") if args.device == 'cuda' else torch.device("cpu")
 
     net = build_model(config).to(device)
 
