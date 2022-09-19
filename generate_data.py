@@ -213,7 +213,7 @@ def prune_patch(patch_coord_list, patch_edge_list):
 
         # straighten the graph by removing redundant nodes
         start = True
-        node_mask = np.ones(coord.shape[0], dtype=np.bool)
+        node_mask = np.ones(coord.shape[0], dtype=bool)
         while start:
             degree = (dist_adj > 0).sum(1)
             deg_2 = list(np.where(degree == 2)[0])
