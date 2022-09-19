@@ -1,8 +1,11 @@
 import os
 import gc
+
+import imageio
+import numpy as np
 import torch
 from monai.engines import SupervisedEvaluator
-from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler
+from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
 from metric_smd import MeanSMD
 from monai.inferers import SimpleInferer
 from monai.transforms import (
@@ -29,6 +32,8 @@ else:
     Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
     Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
     EventEnum, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "EventEnum")
+
+from visualize_sample import create_sample_visual
 
 # Define customized evaluator
 class RelationformerEvaluator(SupervisedEvaluator):
@@ -78,6 +83,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         self.config = kwargs.pop('config')
         
     def _iteration(self, engine, batchdata):
+        print("inside iteration")
         images, nodes, edges = batchdata[0], batchdata[2], batchdata[3]
         
         # # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
@@ -106,7 +112,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        
+        print("finish iteration")
         return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges}
 
 
@@ -124,7 +130,8 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
     val_handlers = [
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
-            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED), 'models'),
+            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
+                                  'models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_key_metric=True,
             key_metric_n_saved=1,
@@ -137,6 +144,13 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
             output_transform=lambda x: None,
             global_epoch_transform=lambda x: scheduler.last_epoch
         ),
+        TensorBoardImageHandler(
+            writer,
+            epoch_level=True,
+            interval=1,
+            # max_channels=3,>
+            output_transform=lambda x: create_sample_visual(x)
+        )
     ]
 
     # val_post_transform = Compose(
