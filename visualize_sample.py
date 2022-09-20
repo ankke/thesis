@@ -29,16 +29,17 @@ def draw_graph(nodes, edges, ax):
     ax.set_ylim(0, 1)
 
 
-def create_sample_visual(sample):
+def create_sample_visual(samples, number_samples=3):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
-    fig, axs = plt.subplots(1, 3, figsize=(1000 * px, 300 * px))
+    fig, axs = plt.subplots(3, 3, figsize=(1000 * px, number_samples * 300 * px))
 
-    axs[0].imshow(inv_norm(sample["images"][0].clone().cpu().detach()).permute(1, 2, 0))
+    for i in range(3):
+        axs[i, 0].imshow(inv_norm(samples["images"][i].clone().cpu().detach()).permute(1, 2, 0))
 
-    plt.sca(axs[1])
-    draw_graph(sample["nodes"][0].clone().cpu().detach(), sample["edges"][0].clone().cpu().detach(), axs[1])
-    plt.sca(axs[2])
-    draw_graph(sample["pred_nodes"][0], sample["pred_edges"][0], axs[2])
+        plt.sca(axs[i, 1])
+        draw_graph(samples["nodes"][i].clone().cpu().detach(), samples["edges"][i].clone().cpu().detach(), axs[i, 1])
+        plt.sca(axs[i, 2])
+        draw_graph(samples["pred_nodes"][i], samples["pred_edges"][i], axs[i, 2])
 
     fig.canvas.draw()
     data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
