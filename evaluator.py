@@ -5,21 +5,13 @@ import imageio
 import numpy as np
 import torch
 from monai.engines import SupervisedEvaluator
-from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
+from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler, \
+    EarlyStopHandler
 from metric_smd import MeanSMD
-from monai.inferers import SimpleInferer
-from monai.transforms import (
-    Compose,
-    AsDiscreted,
-)
-from multiprocessing import Pool
-import pdb
 from inference import relation_infer
-from utils import save_input, save_output
 
 from torch.utils.data import DataLoader
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
-from monai.utils import ForwardMode, min_version, optional_import
 from monai.config import IgniteInfo
 from monai.engines.utils import default_metric_cmp_fn, default_prepare_batch
 from monai.inferers import Inferer, SimpleInferer
@@ -83,7 +75,6 @@ class RelationformerEvaluator(SupervisedEvaluator):
         self.config = kwargs.pop('config')
         
     def _iteration(self, engine, batchdata):
-        print("inside iteration")
         images, nodes, edges = batchdata[0], batchdata[2], batchdata[3]
         
         # # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
@@ -112,11 +103,10 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        print("finish iteration")
         return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges}
 
 
-def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device):
+def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device, early_stop_handler):
     """[summary]
 
     Args:
@@ -128,6 +118,7 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
         [type]: [description]
     """
     val_handlers = [
+        early_stop_handler,
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
@@ -177,3 +168,5 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
     )
 
     return evaluator
+
+

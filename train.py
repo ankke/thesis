@@ -4,6 +4,7 @@ import sys
 import json
 from argparse import ArgumentParser
 import numpy as np
+from monai.handlers import EarlyStopHandler
 
 parser = ArgumentParser()
 parser.add_argument('--config',
@@ -102,15 +103,18 @@ def main(args):
             "params":
                 [p for n, p in net.named_parameters()
                  if not match_name_keywords(n, ["encoder.0"]) and not match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
-            "lr": float(config.TRAIN.LR)
+            "lr": float(config.TRAIN.LR),
+            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
         },
         {
             "params": [p for n, p in net.named_parameters() if match_name_keywords(n, ["encoder.0"]) and p.requires_grad],
-            "lr": float(config.TRAIN.LR_BACKBONE)
+            "lr": float(config.TRAIN.LR_BACKBONE),
+            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
         },
         {
             "params": [p for n, p in net.named_parameters() if match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
-            "lr": float(config.TRAIN.LR)*0.1
+            "lr": float(config.TRAIN.LR)*0.1,
+            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
         }
     ]
 
@@ -146,13 +150,19 @@ def main(args):
             config.log.exp_name, config.DATA.SEED)),
     )
 
+    early_stop_handler = EarlyStopHandler(
+            patience=5,
+            score_function=lambda x: -x.state.metrics["val_smd"]
+    )
+
     evaluator = build_evaluator(
         val_loader,
         net, optimizer,
         scheduler,
         writer,
         config,
-        device
+        device,
+        early_stop_handler
     )
     trainer = build_trainer(
         train_loader,
@@ -168,6 +178,8 @@ def main(args):
         # fp16=args.fp16,
     )
 
+    early_stop_handler.set_trainer(trainer)
+
     if args.resume:
         evaluator.state.epoch = last_epoch
         trainer.state.epoch = last_epoch
@@ -175,7 +187,7 @@ def main(args):
 
     pbar = ProgressBar()
     pbar.attach(trainer, output_transform=lambda x: {
-                'loss': x["loss"]["total"]})
+                'loss': x["loss"]["total"].item()})
     # logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     trainer.run()
 
@@ -187,7 +199,6 @@ def match_name_keywords(n, name_keywords):
             out = True
             break
     return out
-
 
 if __name__ == '__main__':
     args = parser.parse_args()
