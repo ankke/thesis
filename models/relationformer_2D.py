@@ -66,6 +66,9 @@ class RelationFormer(nn.Module):
                     nn.GroupNorm(32, self.hidden_dim),
                 )])
 
+        if not config.TRAIN.TRAIN_ENCODER:
+            self.input_proj.requires_grad_(False)
+
         self.decoder.decoder.bbox_embed = None
 
 

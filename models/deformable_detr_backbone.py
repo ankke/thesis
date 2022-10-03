@@ -139,13 +139,12 @@ class Joiner(nn.Sequential):
 def build_backbone(config):
     print(config)
     position_embedding = build_position_encoding(config)
-    train_backbone = config.TRAIN.TRAIN_CNN_BACKBONE
     return_interm_layers = config.MODEL.ENCODER.MASKS or (
         config.MODEL.ENCODER.NUM_FEATURE_LEVELS > 1)
     backbone = Backbone(
         config.MODEL.ENCODER.BACKBONE,
         config.MODEL.ENCODER.BACKBONE_INIT_WEIGHTS,
-        train_backbone,
+        config.TRAIN.TRAIN_CNN_BACKBONE,
         return_interm_layers,
         config.MODEL.ENCODER.DILATION
     )

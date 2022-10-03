@@ -1,10 +1,19 @@
 import os
 import yaml
-import sys
 import json
 from argparse import ArgumentParser
-import numpy as np
 from monai.handlers import EarlyStopHandler
+import torch
+from monai.data import DataLoader
+from dataset_road_network import build_road_network_data
+from evaluator import build_evaluator
+from trainer import build_trainer
+from models import build_model
+from utils import image_graph_collate_road_network
+from torch.utils.tensorboard import SummaryWriter
+from models.matcher import build_matcher
+from losses import SetCriterion
+from ignite.contrib.handlers.tqdm_logger import ProgressBar
 
 parser = ArgumentParser()
 parser.add_argument('--config',
@@ -19,6 +28,8 @@ parser.add_argument('--device', default='cuda',
                     help='device to use for training')
 parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0, 1],
                     help='list of index where skip conn will be made')
+parser.add_argument('--no_recover_optim', default=True, action="store_false",
+                    help="Whether to restore optimizer's state. Only necessary when resuming training.")
 
 
 class obj:
@@ -52,21 +63,6 @@ def main(args):
             copyfile(args.config, os.path.join(exp_path, "config.yaml"))
         except:
             pass
-
-    import logging
-    import ignite
-    import torch
-    import torch.nn as nn
-    from monai.data import DataLoader
-    from dataset_road_network import build_road_network_data
-    from evaluator import build_evaluator
-    from trainer import build_trainer
-    from models import build_model
-    from utils import image_graph_collate_road_network
-    from torch.utils.tensorboard import SummaryWriter
-    from models.matcher import build_matcher
-    from losses import SetCriterion
-    from ignite.contrib.handlers.tqdm_logger import ProgressBar
 
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.enabled = True
@@ -128,10 +124,14 @@ def main(args):
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
         net.load_state_dict(checkpoint['net'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        if config.TRAIN.RECOVER_OPTIMIZER_STATE:
+            optimizer.load_state_dict(checkpoint['optimizer'])
         scheduler.load_state_dict(checkpoint['scheduler'])
         last_epoch = scheduler.last_epoch
         scheduler.step_size = config.TRAIN.LR_DROP
+
+    for param_group in optimizer.param_groups:
+        print(f'lr: {param_group["lr"]}, number of params: {len(param_group["params"])}')
 
     if args.seg_net:
         checkpoint = torch.load(args.seg_net, map_location='cpu')
@@ -151,7 +151,7 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=5,
+            patience=20,
             score_function=lambda x: -x.state.metrics["val_smd"]
     )
 

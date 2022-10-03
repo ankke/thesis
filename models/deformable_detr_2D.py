@@ -36,7 +36,8 @@ class DeformableTransformer(nn.Module):
                 two_stage=False,
                 rln_attn=False,
                 two_stage_num_proposals=300,
-                train_encoder=True):
+                train_encoder=True,
+                train_decoder=True):
         super().__init__()
 
         self.d_model = d_model
@@ -48,10 +49,6 @@ class DeformableTransformer(nn.Module):
                                                           dropout, activation,
                                                           num_feature_levels, nhead, enc_n_points)
         self.encoder = DeformableTransformerEncoder(encoder_layer, num_encoder_layers)
-
-        if not train_encoder:
-            for parameter in self.encoder.parameters():
-                parameter.requires_grad = False
 
         decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
                                                           dropout, activation,
@@ -69,6 +66,23 @@ class DeformableTransformer(nn.Module):
             self.reference_points = nn.Linear(d_model, 2)
 
         self._reset_parameters()
+
+        if not train_encoder:
+            for name, parameter in self.encoder.named_parameters():
+                parameter.requires_grad = False
+
+        if not train_decoder:
+            for parameter in self.decoder.parameters():
+                parameter.requires_grad = False
+
+            if two_stage:
+                self.enc_output.requires_grad = False
+                self.enc_output_norm.requires_grad = False
+                self.pos_trans.requires_grad = False
+                self.pos_trans_norm.requires_grad = False
+            else:
+                self.reference_points.requires_grad_(False)
+
 
     def _reset_parameters(self):
         for p in self.parameters():
@@ -436,5 +450,6 @@ def build_deforamble_transformer(config):
         return_intermediate_dec=False,
         num_feature_levels=config.MODEL.DECODER.NUM_FEATURE_LEVELS,
         rln_attn=config.MODEL.DECODER.RLN_ATTN,
-        train_encoder=float(config.TRAIN.LR_BACKBONE) > 0
+        train_encoder=config.TRAIN.TRAIN_ENCODER,
+        train_decoder=config.TRAIN.TRAIN_DECODER,
     )
