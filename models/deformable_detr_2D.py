@@ -35,7 +35,9 @@ class DeformableTransformer(nn.Module):
                 enc_n_points=4,
                 two_stage=False,
                 rln_attn=False,
-                two_stage_num_proposals=300):
+                two_stage_num_proposals=300,
+                train_encoder=True,
+                train_decoder=True):
         super().__init__()
 
         self.d_model = d_model
@@ -64,6 +66,23 @@ class DeformableTransformer(nn.Module):
             self.reference_points = nn.Linear(d_model, 2)
 
         self._reset_parameters()
+
+        if not train_encoder:
+            for name, parameter in self.encoder.named_parameters():
+                parameter.requires_grad = False
+
+        if not train_decoder:
+            for parameter in self.decoder.parameters():
+                parameter.requires_grad = False
+
+            if two_stage:
+                self.enc_output.requires_grad = False
+                self.enc_output_norm.requires_grad = False
+                self.pos_trans.requires_grad = False
+                self.pos_trans_norm.requires_grad = False
+            else:
+                self.reference_points.requires_grad_(False)
+
 
     def _reset_parameters(self):
         for p in self.parameters():
@@ -254,7 +273,8 @@ class DeformableTransformerEncoder(nn.Module):
         for lvl, (H_, W_) in enumerate(spatial_shapes):
 
             ref_y, ref_x = torch.meshgrid(torch.linspace(0.5, H_ - 0.5, H_, dtype=torch.float32, device=device),
-                                          torch.linspace(0.5, W_ - 0.5, W_, dtype=torch.float32, device=device))
+                                          torch.linspace(0.5, W_ - 0.5, W_, dtype=torch.float32, device=device),
+                                          indexing='ij')
             ref_y = ref_y.reshape(-1)[None] / (valid_ratios[:, None, lvl, 1] * H_)
             ref_x = ref_x.reshape(-1)[None] / (valid_ratios[:, None, lvl, 0] * W_)
             ref = torch.stack((ref_x, ref_y), -1)
@@ -429,5 +449,7 @@ def build_deforamble_transformer(config):
         activation=config.MODEL.DECODER.ACTIVATION,
         return_intermediate_dec=False,
         num_feature_levels=config.MODEL.DECODER.NUM_FEATURE_LEVELS,
-        rln_attn=config.MODEL.DECODER.RLN_ATTN
+        rln_attn=config.MODEL.DECODER.RLN_ATTN,
+        train_encoder=config.TRAIN.TRAIN_ENCODER,
+        train_decoder=config.TRAIN.TRAIN_DECODER,
     )

@@ -1,8 +1,8 @@
 DATA:
   DIM: 2 # data dimension
-  BATCH_SIZE: 32 #16
-  TEST_BATCH_SIZE: 32 #16
-  DATA_PATH: "./data/global_diverse_cities/train_data/" # Path to dataset, could be overwritten by command line argument
+  BATCH_SIZE: 64 #16
+  TEST_BATCH_SIZE: 16 #16
+  DATA_PATH: "/media/data/alex_johannes/data/global_diverse_cities/agadez/train_data" # Path to dataset, could be overwritten by command line argument
   TEST_DATA_PATH: "/media/data/alex_johannes/data/global_diverse_cities/agadez/test_data/"
   DATASET: "US20-road-network-2D" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
@@ -17,9 +17,9 @@ MODEL:
     NAME: deformable_transformer_backbone
     HIDDEN_DIM: 512 #128 #256 #768
     POSITION_EMBEDDING: sine
-    LR_BACKBONE: 2e-5
     NUM_FEATURE_LEVELS: 4
     BACKBONE: resnet101
+    BACKBONE_INIT_WEIGHTS: ResNet101_Weights
     MASKS: False
     DILATION: False
 
@@ -60,13 +60,17 @@ TRAIN:
   EPOCHS: 100
   LR: 2e-4
   LR_BACKBONE: 2e-5
+  TRAIN_CNN_BACKBONE: True
+  TRAIN_ENCODER: False
+  TRAIN_DECODER: False
   WEIGHT_DECAY: 1e-4
   LR_DROP: 80
   CLIP_MAX_NORM: 0.1 # hardcoded
 
   SAVE_PATH: "./trained_weights/" # save path for the checkpoint, log and val results
-  VAL_INTERVAL: 10 # validation interval
+  VAL_INTERVAL: 1 # validation interval
   SAVE_VAL: False # save validation data
+  RECOVER_OPTIMIZER_STATE: False
 
   # loss weight
   LOSSES: ["boxes", "class", "cards", "nodes", "edges"]
@@ -77,5 +81,5 @@ TRAIN:
   W_EDGE: 4.0
 
 log:
-  exp_name: "baseline_road_resnet_def_detr_final_dec_4"
-  message: "Baseline 2D relationformer for 2D sat network"
+  exp_name: "pretrain_lr0_lr-encoder0_lr-backbone2e-5_train-cnn-true_decay1e-4"
+  message: "pretrain_lr0_lr-encoder0_lr-backbone2e-5_train-cnn-true_decay1e-4"

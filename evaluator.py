@@ -1,22 +1,17 @@
 import os
 import gc
+
+import imageio
+import numpy as np
 import torch
 from monai.engines import SupervisedEvaluator
-from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler
+from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler, \
+    EarlyStopHandler
 from metric_smd import MeanSMD
-from monai.inferers import SimpleInferer
-from monai.transforms import (
-    Compose,
-    AsDiscreted,
-)
-from multiprocessing import Pool
-import pdb
 from inference import relation_infer
-from utils import save_input, save_output
 
 from torch.utils.data import DataLoader
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
-from monai.utils import ForwardMode, min_version, optional_import
 from monai.config import IgniteInfo
 from monai.engines.utils import default_metric_cmp_fn, default_prepare_batch
 from monai.inferers import Inferer, SimpleInferer
@@ -29,6 +24,8 @@ else:
     Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
     Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
     EventEnum, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "EventEnum")
+
+from visualize_sample import create_sample_visual
 
 # Define customized evaluator
 class RelationformerEvaluator(SupervisedEvaluator):
@@ -106,11 +103,10 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        
-        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes":pred_nodes, "pred_edges":pred_edges}
+        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges}
 
 
-def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device):
+def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device, early_stop_handler):
     """[summary]
 
     Args:
@@ -122,9 +118,11 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
         [type]: [description]
     """
     val_handlers = [
+        early_stop_handler,
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
-            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED), 'models'),
+            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
+                                  'models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_key_metric=True,
             key_metric_n_saved=1,
@@ -137,6 +135,13 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
             output_transform=lambda x: None,
             global_epoch_transform=lambda x: scheduler.last_epoch
         ),
+        TensorBoardImageHandler(
+            writer,
+            epoch_level=True,
+            interval=1,
+            # max_channels=3,>
+            output_transform=lambda x: create_sample_visual(x)
+        )
     ]
 
     # val_post_transform = Compose(
@@ -147,7 +152,7 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
     # )
 
     evaluator = RelationformerEvaluator(
-        config= config,
+        config=config,
         device=device,
         val_data_loader=val_loader,
         network=net,
@@ -163,3 +168,5 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
     )
 
     return evaluator
+
+

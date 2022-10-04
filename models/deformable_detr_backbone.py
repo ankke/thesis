@@ -97,14 +97,16 @@ class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
 
     def __init__(self, name: str,
+                 init_weights: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
                  dilation: bool):
         norm_layer = FrozenBatchNorm2d
         # Creates the pretrained model based on config
+        weights = getattr(torchvision.models, init_weights).DEFAULT if is_main_process() else None
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            pretrained=is_main_process(), norm_layer=norm_layer)
+            weights=weights, norm_layer=norm_layer)
         assert name not in (
             'resnet18', 'resnet34'), "number of channels are hard coded"
         super().__init__(backbone, train_backbone, return_interm_layers)
@@ -135,12 +137,15 @@ class Joiner(nn.Sequential):
 
 
 def build_backbone(config):
+    print(config)
     position_embedding = build_position_encoding(config)
-    train_backbone = float(config.MODEL.ENCODER.LR_BACKBONE) > 0
     return_interm_layers = config.MODEL.ENCODER.MASKS or (
         config.MODEL.ENCODER.NUM_FEATURE_LEVELS > 1)
     backbone = Backbone(
-        config.MODEL.ENCODER.BACKBONE, train_backbone, return_interm_layers,
+        config.MODEL.ENCODER.BACKBONE,
+        config.MODEL.ENCODER.BACKBONE_INIT_WEIGHTS,
+        config.TRAIN.TRAIN_CNN_BACKBONE,
+        return_interm_layers,
         config.MODEL.ENCODER.DILATION
     )
     model = Joiner(backbone, position_embedding)

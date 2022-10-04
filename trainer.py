@@ -1,16 +1,9 @@
 import os
-from torch.nn.functional import interpolate
 from monai.engines import SupervisedTrainer
 from monai.inferers import SimpleInferer
-from monai.handlers import LrScheduleHandler, ValidationHandler, StatsHandler, TensorBoardStatsHandler, CheckpointSaver, MeanDice
-from monai.transforms import (
-    Compose,
-    AsDiscreted,
-)
-import torch.nn.functional as F
+from monai.handlers import LrScheduleHandler, ValidationHandler, StatsHandler, TensorBoardStatsHandler, \
+    CheckpointSaver, EarlyStopHandler
 import torch
-from torch.nn.utils import clip_grad_norm
-from inference import relation_infer
 import gc
 
 from utils import get_total_grad_norm
@@ -116,42 +109,48 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             tag_name="classification_loss",
             output_transform=lambda x: x["loss"]["class"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="node_loss",
             output_transform=lambda x: x["loss"]["nodes"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="edge_loss",
             output_transform=lambda x: x["loss"]["edges"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="box_loss",
             output_transform=lambda x: x["loss"]["boxes"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="card_loss",
             output_transform=lambda x: x["loss"]["cards"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="total_loss",
             output_transform=lambda x: x["loss"]["total"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_interval=10,
+            epoch_log=True,
+            epoch_interval=1
         )
     ]
     # train_post_transform = Compose(
@@ -181,3 +180,4 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
     )
 
     return trainer
+
