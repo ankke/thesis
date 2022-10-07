@@ -1,9 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-import itertools
 import pdb
-import box_ops_2D
+from utils.utils import box_ops_2D
 import numpy as np
 
 

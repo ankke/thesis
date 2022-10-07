@@ -1,31 +1,28 @@
 import os
 import gc
 
-import imageio
-import numpy as np
 import torch
 from monai.engines import SupervisedEvaluator
-from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler, \
-    EarlyStopHandler
-from metric_smd import MeanSMD
-from inference import relation_infer
+from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
+from metrics.metric_smd import MeanSMD
+from utils.utils import relation_infer
 
 from torch.utils.data import DataLoader
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Union
 from monai.config import IgniteInfo
 from monai.engines.utils import default_metric_cmp_fn, default_prepare_batch
 from monai.inferers import Inferer, SimpleInferer
 from monai.transforms import Transform
 from monai.utils import ForwardMode, min_version, optional_import
 if TYPE_CHECKING:
-    from ignite.engine import Engine, EventEnum
+    from ignite.engine import EventEnum
     from ignite.metrics import Metric
 else:
     Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
     Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
     EventEnum, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "EventEnum")
 
-from visualize_sample import create_sample_visual
+from data.visualize_sample import create_sample_visual
 
 # Define customized evaluator
 class RelationformerEvaluator(SupervisedEvaluator):
@@ -131,7 +128,7 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
-                                  'models'),
+                                  '../models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_key_metric=True,
             key_metric_n_saved=1,

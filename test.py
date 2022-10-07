@@ -58,12 +58,12 @@ def test(args):
     from tqdm import tqdm
     import numpy as np
 
-    from dataset_road_network import build_road_network_data
+    from data.dataset_road_network import build_road_network_data
     from models import build_model
-    from inference import relation_infer
-    from metric_smd import StreetMoverDistance
-    from metric_map import BBoxEvaluator
-    from box_ops_2D import box_cxcywh_to_xyxy_np
+    from utils.inference import relation_infer
+    from metrics.metric_smd import StreetMoverDistance
+    from metrics.metric_map import BBoxEvaluator
+    from utils.box_ops_2D import box_cxcywh_to_xyxy_np
     from utils import image_graph_collate_road_network
     from metrics.topo import compute_topo
 

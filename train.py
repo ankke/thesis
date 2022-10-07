@@ -5,14 +5,14 @@ from argparse import ArgumentParser
 from monai.handlers import EarlyStopHandler
 import torch
 from monai.data import DataLoader
-from dataset_road_network import build_road_network_data
-from evaluator import build_evaluator
-from trainer import build_trainer
+from data.dataset_road_network import build_road_network_data
+from training.evaluator import build_evaluator
+from training.trainer import build_trainer
 from models import build_model
 from utils import image_graph_collate_road_network
 from torch.utils.tensorboard import SummaryWriter
 from models.matcher import build_matcher
-from losses import SetCriterion
+from training.losses import SetCriterion
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 
 parser = ArgumentParser()
@@ -70,8 +70,6 @@ def main(args):
     device = torch.device("cuda") if args.device == 'cuda' else torch.device("cpu")
 
     net = build_model(config).to(device)
-
-    seg_net = build_model(config).to(device)
 
     matcher = build_matcher(config)
     loss = SetCriterion(config, matcher, net)
@@ -135,6 +133,7 @@ def main(args):
 
     if args.seg_net:
         checkpoint = torch.load(args.seg_net, map_location='cpu')
+        seg_net = build_model(config).to(device)
         seg_net.load_state_dict(checkpoint['net'])
         # net.load_state_dict(checkpoint['net'])
     #     # 1. filter out unnecessary keys
@@ -144,6 +143,8 @@ def main(args):
     #     # net.load_state_dict(checkpoint['net'], strict=False)
     #     # for param in seg_net.parameters():
         #     param.requires_grad = False
+    else:
+        seg_net = None
 
     writer = SummaryWriter(
         log_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
@@ -151,13 +152,15 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=20,
-            score_function=lambda x: -x.state.metrics["val_smd"]
+            patience=10,
+            score_function=lambda x: -x.state.output["loss"]["total"].item()
     )
 
     evaluator = build_evaluator(
         val_loader,
-        net, optimizer,
+        net,
+        loss,
+        optimizer,
         scheduler,
         writer,
         config,

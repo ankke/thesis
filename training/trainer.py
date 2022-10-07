@@ -2,11 +2,9 @@ import os
 from monai.engines import SupervisedTrainer
 from monai.inferers import SimpleInferer
 from monai.handlers import LrScheduleHandler, ValidationHandler, StatsHandler, TensorBoardStatsHandler, \
-    CheckpointSaver, EarlyStopHandler
+    CheckpointSaver
 import torch
 import gc
-
-from utils import get_total_grad_norm
 
 
 # define customized trainer
@@ -99,7 +97,8 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             output_transform=lambda x: x["loss"]["total"]
         ),
         CheckpointSaver(
-            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED), 'models'),
+            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
+                                  '../models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_interval=1,
             n_saved=1
