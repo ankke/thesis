@@ -1,5 +1,4 @@
 .DS_Store
-/data
 /trained_weights
 /models/ops/build
 /models/ops/dist
