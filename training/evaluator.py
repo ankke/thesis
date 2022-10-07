@@ -34,6 +34,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         device: torch.device,
         val_data_loader: Union[Iterable, DataLoader],
         network: torch.nn.Module,
+        loss_function=None,
         epoch_length: Optional[int] = None,
         non_blocking: bool = False,
         prepare_batch: Callable = default_prepare_batch,
@@ -68,10 +69,11 @@ class RelationformerEvaluator(SupervisedEvaluator):
             event_names=event_names,
             event_to_attr=event_to_attr,
             decollate=decollate,
-            network = network,
-            inferer = SimpleInferer() if inferer is None else inferer
+            network=network,
+            inferer=SimpleInferer() if inferer is None else inferer,
         )
 
+        self.loss_function = loss_function
         self.config = kwargs.pop('config')
         
     def _iteration(self, engine, batchdata):
@@ -82,10 +84,17 @@ class RelationformerEvaluator(SupervisedEvaluator):
         images = images.to(engine.state.device,  non_blocking=False)
         nodes = [node.to(engine.state.device,  non_blocking=False) for node in nodes]
         edges = [edge.to(engine.state.device,  non_blocking=False) for edge in edges]
+        target = {'nodes': nodes, 'edges': edges}
 
         self.network.eval()
         
         h, out, srcs = self.network(images, seg=False)
+
+        losses = self.loss_function(
+            h.clone().detach(),
+            {'pred_logits': out['pred_logits'].clone().detach(), 'pred_nodes': out["pred_nodes"].clone().detach()},
+            {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges]}
+        )
 
         pred_nodes, pred_edges = relation_infer(
             h.detach(), out, self.network, self.config.MODEL.DECODER.OBJ_TOKEN, self.config.MODEL.DECODER.RLN_TOKEN
@@ -103,10 +112,10 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges}
+        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
 
 
-def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, device, early_stop_handler):
+def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config, device, early_stop_handler):
     """[summary]
 
     Args:
@@ -135,6 +144,14 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
             output_transform=lambda x: None,
             global_epoch_transform=lambda x: scheduler.last_epoch
         ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="val_total_loss",
+            output_transform=lambda x: None,
+            #global_epoch_transform=lambda x: scheduler.last_epoch,
+            iteration_log=True,
+            epoch_event_writer=write_metric
+        ),
         TensorBoardImageHandler(
             writer,
             epoch_level=True,
@@ -161,12 +178,18 @@ def build_evaluator(val_loader, net, optimizer, scheduler, writer, config, devic
         key_val_metric={
             "val_smd": MeanSMD(
                 output_transform=lambda x: (x["nodes"], x["edges"], x["pred_nodes"], x["pred_edges"]),
-            )
+            ),
         },
         val_handlers=val_handlers,
         amp=False,
+        loss_function=loss
     )
 
     return evaluator
+
+
+def write_metric(engine, writer):
+    writer.add_scalar("val_total_loss", engine.state.output["loss"]["total"].item(), engine.state.epoch)
+    writer.flush()
 
 

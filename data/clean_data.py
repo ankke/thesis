@@ -1,12 +1,9 @@
-import sys
-
 import numpy as np
 import yaml
 import os
-import torch
 import imageio
 import pyvista
-from utils import dict2obj
+from utils.utils import dict2obj
 from argparse import ArgumentParser
 
 def evaluate_single_sample(seg, nodes, strictness=1):

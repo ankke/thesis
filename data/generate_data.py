@@ -1,4 +1,3 @@
-import pdb
 import math
 import imageio
 import pyvista
@@ -6,11 +5,10 @@ import numpy as np
 import pickle
 import random
 import os
-import sys
 import json
 import yaml
 from argparse import ArgumentParser
-from utils import dict2obj, obj
+from utils.utils import dict2obj
 
 patch_size = [128, 128, 1]
 pad = [5, 5, 0]
@@ -168,7 +166,7 @@ def patch_extract(save_path, image, seg,  mesh, device=None):
         # reshape the edge list into previous format
         patch_edge = np.array(temp).reshape(-1, 2)
 
-        if patch_coordinates.shape[0] < 2 or patch_edge.shape[0] < 1:
+        if patch_coordinates.shape[0] < 2 or patch_edge.shape[0] < 1 or patch_coordinates.shape[0] > 80:
             continue
         # concatenate final variables
         patch_coordinates = (patch_coordinates-start +
@@ -414,4 +412,3 @@ def generate_data(args):
 if __name__ == "__main__":
     args = parser.parse_args()
     generate_data(args)
-
