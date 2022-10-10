@@ -6,10 +6,11 @@ from monai.handlers import EarlyStopHandler
 import torch
 from monai.data import DataLoader
 from data.dataset_road_network import build_road_network_data
+from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
 from training.evaluator import build_evaluator
 from training.trainer import build_trainer
 from models import build_model
-from utils import image_graph_collate_road_network
+from utils.utils import image_graph_collate_road_network
 from torch.utils.tensorboard import SummaryWriter
 from models.matcher import build_matcher
 from training.losses import SetCriterion
@@ -71,10 +72,17 @@ def main(args):
 
     net = build_model(config).to(device)
 
+    seg_net = build_model(config).to(device)
+
     matcher = build_matcher(config)
     loss = SetCriterion(config, matcher, net)
 
-    train_ds, val_ds = build_road_network_data(
+    if config.DATA.DATASET == 'road_dataset':
+        build_dataset_function = build_road_network_data
+    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
+        build_dataset_function = build_synthetic_vessel_network_data
+
+    train_ds, val_ds = build_dataset_function(
         config, mode='split'
     )
 
@@ -133,7 +141,6 @@ def main(args):
 
     if args.seg_net:
         checkpoint = torch.load(args.seg_net, map_location='cpu')
-        seg_net = build_model(config).to(device)
         seg_net.load_state_dict(checkpoint['net'])
         # net.load_state_dict(checkpoint['net'])
     #     # 1. filter out unnecessary keys
@@ -143,8 +150,6 @@ def main(args):
     #     # net.load_state_dict(checkpoint['net'], strict=False)
     #     # for param in seg_net.parameters():
         #     param.requires_grad = False
-    else:
-        seg_net = None
 
     writer = SummaryWriter(
         log_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (

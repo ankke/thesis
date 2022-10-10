@@ -60,7 +60,7 @@ def test(args):
 
     from data.dataset_road_network import build_road_network_data
     from models import build_model
-    from utils.inference import relation_infer
+    from training.inference import relation_infer
     from metrics.metric_smd import StreetMoverDistance
     from metrics.metric_map import BBoxEvaluator
     from utils.box_ops_2D import box_cxcywh_to_xyxy_np
