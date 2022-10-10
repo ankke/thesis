@@ -6,9 +6,7 @@ import pickle
 import random
 import os
 import json
-import yaml
 from argparse import ArgumentParser
-from utils.utils import dict2obj
 
 patch_size = [128, 128, 1]
 pad = [5, 5, 0]
@@ -281,6 +279,11 @@ parser.add_argument('--city_names',
                     default=None,
                     required=False,
                     help='Path to json with city names that are prefixing the raw source images')
+parser.add_argument('--seed',
+                    default=0,
+                    type=int,
+                    required=False,
+                    help='Random seed')
 
 image_id = 1
 
@@ -292,14 +295,6 @@ def generate_data(args):
     amount_images = args.source_number
     split = args.split
 
-    # Load the config files
-    with open(args.config) as f:
-        print('\n*** Config file')
-        print(args.config)
-        config = yaml.load(f, Loader=yaml.FullLoader)
-        print(config['log']['message'])
-    config = dict2obj(config)
-
     # If data has prefix with city names, a json with all names must be provided
     cities = []
     if args.city_names is not None:
@@ -308,7 +303,7 @@ def generate_data(args):
             cities.append({"name": item["cityname"], "id": item["id"]})
 
     # Sets the seed for reproducibility
-    random.seed(config.DATA.SEED)
+    random.seed(args.seed)
 
     indrange_train = []
     indrange_test = []

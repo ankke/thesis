@@ -5,10 +5,7 @@ import numpy as np
 import pickle
 import random
 import os
-import json
-import yaml
 from argparse import ArgumentParser
-from utils.utils import dict2obj
 
 patch_size = [128, 128, 1]
 pad = [5, 5, 0]
@@ -229,15 +226,8 @@ def prune_patch(patch_coord_list, patch_edge_list):
 
     return mod_patch_coord_list, mod_patch_edge_list
 
-#indrange_test = range(10)
-#indrange_train = []
 
 parser = ArgumentParser()
-parser.add_argument('--config',
-                    default=None,
-                    required=True,
-                    help='config file (.yml) containing the hyper-parameters for data. '
-                         'Should be the same as for training/testing. See /config for examples.')
 parser.add_argument('--source',
                     default=None,
                     required=True,
@@ -251,15 +241,16 @@ parser.add_argument('--source_number',
                     type=int,
                     required=True,
                     help='Number of images in source directory')
+parser.add_argument('--seed',
+                    default=0,
+                    type=int,
+                    required=False,
+                    help='Random seed')
 parser.add_argument('--split',
                     default=0.8,
                     type=float,
                     help='Train/Test split. 0.8 means 80% of the data will be training data and 20% testing data'
                         'Default: 0.8')
-parser.add_argument('--city_names',
-                    default=None,
-                    required=False,
-                    help='Path to json with city names that are prefixing the raw source images')
 
 image_id = 1
 
@@ -271,23 +262,8 @@ def generate_data(args):
     amount_images = args.source_number
     split = args.split
 
-    # Load the config files
-    with open(args.config) as f:
-        print('\n*** Config file')
-        print(args.config)
-        config = yaml.load(f, Loader=yaml.FullLoader)
-        print(config['log']['message'])
-    config = dict2obj(config)
-
-    # If data has prefix with city names, a json with all names must be provided
-    cities = []
-    if args.city_names is not None:
-        dataset_cfg_ = json.load(open(args.city_names, "r"))
-        for item in dataset_cfg_:
-            cities.append({"name": item["cityname"], "id": item["id"]})
-
     # Sets the seed for reproducibility
-    random.seed(config.DATA.SEED)
+    random.seed(args.seed)
 
     indrange_train = []
     indrange_test = []
@@ -312,11 +288,8 @@ def generate_data(args):
     vtk_files = []
 
     for ind in indrange_train:
-        # If data is prefixed with city name, add this to the filenames
-        file_prefix = \
-            f"{root_dir}/{cities[ind]['name']}_region_{cities[ind]['id']}_" if len(cities) > 0 else f"{root_dir}/region_{ind}_"
-        raw_files.append(f"{root_dir}/scan_img")
-        vtk_files.append(f"{root_dir}/gt_graph.pkl")
+        raw_files.append(f"{root_dir}/{ind}_scan")
+        vtk_files.append(f"{root_dir}/{ind}_gt_graph.pkl")
 
     for ind in range(len(raw_files)):
         print(ind)
@@ -338,13 +311,10 @@ def generate_data(args):
         mesh.lines = patch_edge.flatten()
         patch_extract(train_path, sat_img, mesh)
 
-    return
-
     image_id = 1
     test_path = f"{target_dir}/test_data/"
     if not os.path.isdir(test_path):
         os.makedirs(test_path)
-        os.makedirs(test_path + '/seg')
         os.makedirs(test_path + '/vtp')
         os.makedirs(test_path + '/raw')
     else:
@@ -353,16 +323,12 @@ def generate_data(args):
     print('Preparing Test Data')
 
     raw_files = []
-    seg_files = []
     vtk_files = []
 
     for ind in indrange_test:
         # If data is prefixed with city name, add this to the filenames
-        file_prefix = \
-            f"{root_dir}/{cities[ind]['name']}_region_{cities[ind]['id']}_" if len(cities) > 0 else f"{root_dir}/region_{ind}_"
-        raw_files.append(f"{file_prefix}sat")
-        seg_files.append(f"{file_prefix}gt.png")
-        vtk_files.append(f"{file_prefix}refine_gt_graph.p")
+        raw_files.append(f"{root_dir}/{ind}_scan")
+        vtk_files.append(f"{root_dir}/{ind}_gt_graph.pkl")
 
     for ind in range(len(raw_files)):
         print(ind)
@@ -373,17 +339,16 @@ def generate_data(args):
 
         with open(vtk_files[ind], 'rb') as f:
             graph = pickle.load(f)
-        node_array, edge_array = convert_graph(graph)
+        node_array = graph["nodes"] * np.array([sat_img.shape[0], sat_img.shape[1]])
+        edge_array = graph["edges"]
 
-        gt_seg = imageio.imread(seg_files[ind])
         patch_coord = np.concatenate(
             (node_array, np.int32(np.zeros((node_array.shape[0], 1)))), 1)
         mesh = pyvista.PolyData(patch_coord)
         patch_edge = np.concatenate(
             (np.int32(2 * np.ones((edge_array.shape[0], 1))), edge_array), 1)
         mesh.lines = patch_edge.flatten()
-
-        patch_extract(test_path, sat_img, gt_seg, mesh)
+        patch_extract(test_path, sat_img, mesh)
 
 
 if __name__ == "__main__":

@@ -61,7 +61,9 @@ class Vessel2GraphDataLoader(Dataset):
             [type]: [description]
         """
         data = self.data[idx]
-        image_data = Image.open(data['img']).convert('RGB')
+        raw_data = Image.open(data['img'])
+        seg_data = torch.tensor(np.array(raw_data))
+        image_data = raw_data.convert('RGB')
         image_data = torch.tensor(
             np.array(image_data), dtype=torch.float).permute(2, 0, 1)
         image_data = image_data/255.0
@@ -79,7 +81,7 @@ class Vessel2GraphDataLoader(Dataset):
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
 
-        return image_data, coordinates[:, :2], lines[:, 1:]
+        return image_data, seg_data, coordinates[:, :2], lines[:, 1:]
 
 
 def build_synthetic_vessel_network_data(config, mode='train', split=0.95):

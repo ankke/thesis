@@ -31,9 +31,9 @@ def draw_graph(nodes, edges, ax):
 
 def create_sample_visual(samples, number_samples=3):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
-    fig, axs = plt.subplots(3, 3, figsize=(1000 * px, number_samples * 300 * px))
+    fig, axs = plt.subplots(number_samples, 3, figsize=(1000 * px, number_samples * 300 * px))
 
-    for i in range(3):
+    for i in range(number_samples):
         axs[i, 0].imshow(inv_norm(samples["images"][i].clone().cpu().detach()).permute(1, 2, 0))
 
         plt.sca(axs[i, 1])
