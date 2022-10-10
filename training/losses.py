@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 import pdb
-from utils.utils import box_ops_2D
+from utils import box_ops_2D
 import numpy as np
 
 
@@ -231,12 +231,9 @@ class SetCriterion(nn.Module):
                 else:
                     relation_feature.append(torch.cat((rearranged_object_token[all_edges_[:,0],:],rearranged_object_token[all_edges_[:,1],:]), 1))
 
-            # [print(e,l) for e,l in zip(all_edges, edge_labels)]
-
             # torch.tensor(list(itertools.combinations(range(n.shape[0]), 2))).to(e.get_device())
             relation_feature = torch.cat(relation_feature, 0)
             edge_labels = torch.cat(edge_labels, 0).to(h.get_device())
-
             relation_pred = self.net.relation_embed(relation_feature)
 
             # valid_edges = torch.argmax(relation_pred, -1)
