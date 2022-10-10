@@ -5,7 +5,7 @@ import torch
 from monai.engines import SupervisedEvaluator
 from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
 from metrics.metric_smd import MeanSMD
-from utils.utils import relation_infer
+from training.inference import relation_infer
 
 from torch.utils.data import DataLoader
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Union
@@ -128,7 +128,7 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
-                                  '../models'),
+                                  './models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_key_metric=True,
             key_metric_n_saved=1,

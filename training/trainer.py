@@ -98,7 +98,7 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         ),
         CheckpointSaver(
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
-                                  '../models'),
+                                  './models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_interval=1,
             n_saved=1
