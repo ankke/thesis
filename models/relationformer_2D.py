@@ -37,7 +37,12 @@ class RelationFormer(nn.Module):
         self.bbox_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM, config.MODEL.DECODER.HIDDEN_DIM, 4, 3)
         
         if config.MODEL.DECODER.RLN_TOKEN > 0:
-            self.relation_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM*3, config.MODEL.DECODER.HIDDEN_DIM, 2, 3)
+            self.relation_embed = MLP(
+                config.MODEL.DECODER.HIDDEN_DIM*(2 + config.MODEL.DECODER.RLN_TOKEN),
+                config.MODEL.DECODER.HIDDEN_DIM,
+                2,
+                4
+            )
         else:
             self.relation_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM*2, config.MODEL.DECODER.HIDDEN_DIM, 2, 3)
 
