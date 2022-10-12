@@ -70,8 +70,21 @@ def relation_infer(h, out, model, obj_token, rln_token, nms=False, map_=False):
 
             # concatenate valid object pairs relation feature
             if rln_token>0:
-                relation_feature1  = torch.cat((object_token[batch_id,node_pairs[0],:], object_token[batch_id,node_pairs[1],:], relation_token[batch_id,...].repeat(len(node_pairs_valid),1)), 1)
-                relation_feature2  = torch.cat((object_token[batch_id,node_pairs[1],:], object_token[batch_id,node_pairs[0],:], relation_token[batch_id,...].repeat(len(node_pairs_valid),1)), 1)
+                relation_feature1  = torch.cat(
+                    (
+                        object_token[batch_id,node_pairs[0],:],
+                        object_token[batch_id,node_pairs[1],:],
+                        torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)
+                    ),
+                    1
+                )
+                relation_feature2  = torch.cat(
+                    (
+                        object_token[batch_id,node_pairs[1],:],
+                        object_token[batch_id,node_pairs[0],:],
+                        torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)),
+                    1
+                )
             else:
                 relation_feature1  = torch.cat((object_token[batch_id,node_pairs[0],:], object_token[batch_id,node_pairs[1],:]), 1)
                 relation_feature2  = torch.cat((object_token[batch_id,node_pairs[1],:], object_token[batch_id,node_pairs[0],:]), 1)
