@@ -157,7 +157,7 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=10,
+            patience=15,
             score_function=lambda x: -x.state.output["loss"]["total"].item()
     )
 
