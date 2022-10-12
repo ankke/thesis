@@ -73,6 +73,7 @@ class SetCriterion(nn.Module):
         self.rln_token = config.MODEL.DECODER.RLN_TOKEN
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
+        self.num_edge_samples = config.TRAIN.NUM_EDGE_SAMPLES
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -190,6 +191,8 @@ class SetCriterion(nn.Module):
                 rearranged_object_token = object_token[batch_id, indices[batch_id][0],:]
                 
                 # find the -ve edges for training
+                # creates adj matrix, where the diagonal and every edge is represented by 0
+                # neg_edges: List of tuples of nodes between which are no edges
                 full_adj = torch.ones((n.shape[0],n.shape[0]))-torch.diag(torch.ones(n.shape[0]))
                 full_adj[pos_edge[:,0],pos_edge[:,1]]=0
                 full_adj[pos_edge[:,1],pos_edge[:,0]]=0
@@ -225,7 +228,7 @@ class SetCriterion(nn.Module):
                 # all_edges.append(all_edges_)
                 edge_labels.append(torch.cat((torch.ones(pos_edge.shape[0], dtype=torch.long), torch.zeros(take_neg, dtype=torch.long)), 0))
 
-                # concatenate object token pairs with relation token
+                # concatenate object token pairs with relation token for all sampled edges
                 if self.rln_token > 0:
                     relation_feature.append(torch.cat((rearranged_object_token[all_edges_[:,0],:],rearranged_object_token[all_edges_[:,1],:],relation_token[batch_id,...].repeat(total_edge,1)), 1))
                 else:
@@ -273,7 +276,7 @@ class SetCriterion(nn.Module):
         losses['class'] = self.loss_class(out['pred_logits'], indices)
         losses['nodes'] = self.loss_nodes(out['pred_nodes'][...,:2], target['nodes'], indices)
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
-        losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
+        losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices, num_edges=self.num_edge_samples)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
         
         losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
