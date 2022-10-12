@@ -27,7 +27,7 @@ parser.add_argument('--seg_net', default=None,
                     help='checkpoint of the segmentation model')
 parser.add_argument('--device', default='cuda',
                     help='device to use for training')
-parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0, 1],
+parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
                     help='list of index where skip conn will be made')
 parser.add_argument('--no_recover_optim', default=True, action="store_false",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
@@ -51,8 +51,10 @@ def main(args):
         config = yaml.load(f, Loader=yaml.FullLoader)
         print(config['log']['message'])
     config = dict2obj(config)
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
-        map(str, args.cuda_visible_device))
+    if args.cuda_visible_device:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
+            map(str, args.cuda_visible_device))
+        print(os.environ["CUDA_VISIBLE_DEVICES"])
 
     exp_path = os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
         config.log.exp_name, config.DATA.SEED))
