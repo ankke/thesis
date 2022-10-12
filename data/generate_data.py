@@ -315,6 +315,7 @@ def generate_data(args):
             indrange_test.append(x)
 
     image_id = 1
+    """
     train_path = f"{target_dir}/train_data/"
     if not os.path.isdir(train_path):
         os.makedirs(train_path)
@@ -357,7 +358,7 @@ def generate_data(args):
         mesh.lines = patch_edge.flatten()
 
         patch_extract(train_path, sat_img, gt_seg, mesh)
-
+    """
     image_id = 1
     test_path = f"{target_dir}/test_data/"
     if not os.path.isdir(test_path):

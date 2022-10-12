@@ -1,9 +1,9 @@
 DATA:
   DIM: 2 # data dimension
-  BATCH_SIZE: 64 #16
+  BATCH_SIZE: 128 #16
   TEST_BATCH_SIZE: 16 #16
-  DATA_PATH: "/media/data/alex_johannes/data/20cities/train_data" # Path to dataset, could be overwritten by command line argument
-  TEST_DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/test_data"
+  DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/train_data" # Path to dataset, could be overwritten by command line argument
+  TEST_DATA_PATH: "/media/data/alex_johannes/data/20cities/test_data"
   DATASET: "synthetic_eye_vessel_dataset" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
   NUM_WORKERS: 4 # Number of data loading threads
@@ -15,7 +15,7 @@ MODEL:
   ENCODER:
     TYPE: deformable_transformer_backbone
     NAME: deformable_transformer_backbone
-    HIDDEN_DIM: 1024 #128 #256 #768
+    HIDDEN_DIM: 512 #128 #256 #768
     POSITION_EMBEDDING: sine
     NUM_FEATURE_LEVELS: 4
     BACKBONE: resnet101
@@ -30,11 +30,11 @@ MODEL:
   DECODER:
     TYPE: deformable_transformer
     NAME: deformable_transformer
-    HIDDEN_DIM: 1024 #128 #256 #768
+    HIDDEN_DIM: 512 #128 #256 #768
     NHEADS: 8
     ENC_LAYERS: 3 #4 #2
     DEC_LAYERS: 3 #4 #2
-    DIM_FEEDFORWARD: 512 #128 #512 #2048
+    DIM_FEEDFORWARD: 1024 #128 #512 #2048
     DROPOUT: 0.1 # 0.0
     ACTIVATION: relu
     NUM_FEATURE_LEVELS: 4
@@ -47,7 +47,7 @@ MODEL:
     # RLN_TOKEN: True
 
     OBJ_TOKEN: 80
-    RLN_TOKEN: 1
+    RLN_TOKEN: 2
     DUMMY_TOKEN: 0
 
     RLN_ATTN: True # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
@@ -58,14 +58,15 @@ MODEL:
 
 TRAIN:
   EPOCHS: 180
-  LR: 2e-4
-  LR_BACKBONE: 2e-5
+  LR: 1e-3
+  LR_BACKBONE: 1e-3
   TRAIN_CNN_BACKBONE: True
   TRAIN_ENCODER: True
   TRAIN_DECODER: True
   WEIGHT_DECAY: 1e-4
   LR_DROP: 120
   CLIP_MAX_NORM: 0.1 # hardcoded
+  NUM_EDGE_SAMPLES: 80
 
   SAVE_PATH: "./trained_weights/" # save path for the checkpoint, log and val results
   VAL_INTERVAL: 1 # validation interval
@@ -81,5 +82,5 @@ TRAIN:
   W_EDGE: 4.0
 
 log:
-  exp_name: "baseline_DIM1024"
-  message: "baseline_DIM1024"
+  exp_name: "pre_big_data_full_lr1e-3_lr-backend1e-3_10_new-loss"
+  message: "pre_big_data_full_lr1e-3_lr-backend1e-3_10_new-loss"

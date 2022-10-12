@@ -29,7 +29,7 @@ def draw_graph(nodes, edges, ax):
     ax.set_ylim(0, 1)
 
 
-def create_sample_visual(samples, number_samples=3):
+def create_sample_visual(samples, number_samples=10):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
     fig, axs = plt.subplots(number_samples, 3, figsize=(1000 * px, number_samples * 300 * px))
 
