@@ -31,13 +31,14 @@ class FrozenBatchNorm2d(torch.nn.Module):
     produce nans.
     """
 
-    def __init__(self, n, eps=1e-5):
+    def __init__(self, n, eps=1e-5, inv=False):
         super(FrozenBatchNorm2d, self).__init__()
         self.register_buffer("weight", torch.ones(n))
         self.register_buffer("bias", torch.zeros(n))
         self.register_buffer("running_mean", torch.zeros(n))
         self.register_buffer("running_var", torch.ones(n))
         self.eps = eps
+        self.inv = inv
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
                               missing_keys, unexpected_keys, error_msgs):
@@ -59,7 +60,10 @@ class FrozenBatchNorm2d(torch.nn.Module):
         eps = self.eps
         scale = w * (rv + eps).rsqrt()
         bias = b - rm * scale
-        return x * scale + bias
+        if not self.inv:
+            return x * scale + bias
+        else:
+            return (x - bias) / scale
 
 
 class BackboneBase(nn.Module):
