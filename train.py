@@ -1,6 +1,7 @@
 import os
 import yaml
 import json
+import shutil
 from argparse import ArgumentParser
 from monai.handlers import EarlyStopHandler
 import torch
@@ -58,12 +59,12 @@ def main(args):
 
     exp_path = os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
         config.log.exp_name, config.DATA.SEED))
-    if os.path.exists(exp_path) and args.resume == None:
+    if os.path.exists(exp_path):
         print('ERROR: Experiment folder exist, please change exp name in config file')
     else:
         try:
             os.makedirs(exp_path)
-            copyfile(args.config, os.path.join(exp_path, "config.yaml"))
+            shutil.copyfile(args.config, os.path.join(exp_path, "config.yaml"))
         except:
             pass
 
@@ -159,7 +160,7 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=15,
+            patience=60,
             score_function=lambda x: -x.state.output["loss"]["total"].item()
     )
 

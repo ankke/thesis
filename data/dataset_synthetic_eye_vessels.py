@@ -30,7 +30,7 @@ class Vessel2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, transform):
+    def __init__(self, data, transform, max_nodes):
         """[summary]
 
         Args:
@@ -39,6 +39,7 @@ class Vessel2GraphDataLoader(Dataset):
         """
         self.data = data
         self.transform = transform
+        self.max_nodes = max_nodes
 
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
@@ -81,7 +82,15 @@ class Vessel2GraphDataLoader(Dataset):
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
 
-        return image_data, seg_data, coordinates[:, :2], lines[:, 1:]
+        lines = lines[:, 1:]
+
+        if coordinates[:, :2].shape[0] > self.max_nodes:
+            print("Warning: Too many nodes in sample. Nodes will be deleted")
+            lines = lines[lines[:, 0] < self.max_nodes]
+            lines = lines[lines[:, 1] < self.max_nodes]
+
+
+        return image_data, seg_data, coordinates[:self.max_nodes, :2], lines
 
 
 def build_synthetic_vessel_network_data(config, mode='train', split=0.95):
@@ -112,6 +121,7 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95):
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             transform=train_transform,
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
     elif mode == 'test':
@@ -131,6 +141,7 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95):
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             transform=val_transform,
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
     elif mode == 'split':
@@ -155,9 +166,11 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95):
         train_ds = Vessel2GraphDataLoader(
             data=train_files,
             transform=train_transform,
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         val_ds = Vessel2GraphDataLoader(
             data=val_files,
             transform=val_transform,
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return train_ds, val_ds
