@@ -152,3 +152,30 @@ class obj:
 
 def dict2obj(dict1):
     return json.loads(json.dumps(dict1), object_hook=obj)
+
+def upsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval):
+    target_pos_edges = relation_pred[edge_labels == 1]
+    target_neg_edges = relation_pred[edge_labels == 0]
+
+    actual_ratio = target_pos_edges.shape[0] / target_neg_edges.shape[0]
+
+    if actual_ratio < sample_ratio - acceptance_interval:
+        target_num = target_neg_edges.shape[0] * sample_ratio
+        num_new_edges = int(target_num - target_pos_edges.shape[0])
+
+        new_edges = target_pos_edges.repeat(int(num_new_edges / target_pos_edges.shape[0]), 1)
+        new_edges = torch.cat((new_edges, target_pos_edges[:int(num_new_edges - new_edges.shape[0])]))
+
+        new_labels = torch.ones(num_new_edges, dtype=torch.long, device=relation_pred.device)
+    elif sample_ratio + acceptance_interval < actual_ratio:
+        target_num = target_pos_edges.shape[0] * (1 / sample_ratio)
+        num_new_edges = int(target_num - target_neg_edges.shape[0])
+
+        new_edges = target_neg_edges.repeat(int(num_new_edges / target_neg_edges.shape[0]), 1)
+        new_edges = torch.cat((new_edges, target_neg_edges[:int(num_new_edges - new_edges.shape[0])]))
+
+        new_labels = torch.zeros(num_new_edges, dtype=torch.long, device=relation_pred.device)
+    else:
+        return relation_pred, edge_labels
+
+    return torch.cat((relation_pred, new_edges)), torch.cat((edge_labels, new_labels))
