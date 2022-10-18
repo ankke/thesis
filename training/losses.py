@@ -4,7 +4,7 @@ from torch import nn
 import pdb
 from utils import box_ops_2D
 import numpy as np
-
+from utils.utils import upsample_edges
 
 def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):
     """
@@ -157,7 +157,7 @@ class SetCriterion(nn.Module):
         loss = loss.sum() / num_boxes
         return loss
 
-    def loss_edges(self, h, target_nodes, target_edges, indices, num_edges=80):
+    def loss_edges(self, h, target_nodes, target_edges, indices, num_edges=80, sample_ratio=1/5, acceptance_interval=0.05):
         """Compute the losses related to the masks: the focal loss and the dice loss.
            targets dicts must contain the key "masks" containing a tensor of dim [nb_target_boxes, h, w]
         """
@@ -246,6 +246,8 @@ class SetCriterion(nn.Module):
 
         # valid_edges = torch.argmax(relation_pred, -1)
         # print('valid_edge number', valid_edges.sum())
+
+        relation_pred, edge_labels = upsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval)
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
