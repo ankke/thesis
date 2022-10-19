@@ -74,6 +74,8 @@ class SetCriterion(nn.Module):
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
         self.num_edge_samples = config.TRAIN.NUM_EDGE_SAMPLES
+        self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
+        self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -157,7 +159,7 @@ class SetCriterion(nn.Module):
         loss = loss.sum() / num_boxes
         return loss
 
-    def loss_edges(self, h, target_nodes, target_edges, indices, num_edges=80, sample_ratio=1/5, acceptance_interval=0.05):
+    def loss_edges(self, h, target_nodes, target_edges, indices, num_edges=80):
         """Compute the losses related to the masks: the focal loss and the dice loss.
            targets dicts must contain the key "masks" containing a tensor of dim [nb_target_boxes, h, w]
         """
@@ -247,7 +249,8 @@ class SetCriterion(nn.Module):
         # valid_edges = torch.argmax(relation_pred, -1)
         # print('valid_edge number', valid_edges.sum())
 
-        relation_pred, edge_labels = upsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval)
+        relation_pred, edge_labels = \
+            upsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
