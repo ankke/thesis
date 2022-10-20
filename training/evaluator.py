@@ -143,11 +143,43 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         ),
         TensorBoardStatsHandler(
             writer,
-            tag_name="val_total_loss",
+            tag_name="val_card_loss",
+            output_transform=lambda x: None,
+            # global_epoch_transform=lambda x: scheduler.last_epoch,
+            iteration_log=True,
+            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "cards")
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="val_classification_loss",
+            output_transform=lambda x: None,
+            # global_epoch_transform=lambda x: scheduler.last_epoch,
+            iteration_log=True,
+            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "class")
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="val_edge_loss",
             output_transform=lambda x: None,
             #global_epoch_transform=lambda x: scheduler.last_epoch,
             iteration_log=True,
-            epoch_event_writer=write_metric
+            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "edges")
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="val_node_loss",
+            output_transform=lambda x: None,
+            # global_epoch_transform=lambda x: scheduler.last_epoch,
+            iteration_log=True,
+            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "nodes")
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="val_total_loss",
+            output_transform=lambda x: None,
+            # global_epoch_transform=lambda x: scheduler.last_epoch,
+            iteration_log=True,
+            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "total")
         ),
         TensorBoardImageHandler(
             writer,
@@ -185,8 +217,8 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
     return evaluator
 
 
-def write_metric(engine, writer):
-    writer.add_scalar("val_total_loss", engine.state.output["loss"]["total"].item(), engine.state.epoch)
+def write_metric(engine, writer, metric_name):
+    writer.add_scalar(f"val_{metric_name}_loss", engine.state.output["loss"][metric_name].item(), engine.state.epoch)
     writer.flush()
 
 
