@@ -5,6 +5,7 @@ import torch
 from monai.engines import SupervisedEvaluator
 from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
 from metrics.loss_metric import MeanLoss
+from metrics.metric_smd import MeanSMD
 from training.inference import relation_infer
 
 from torch.utils.data import DataLoader
@@ -137,41 +138,9 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         ),
         TensorBoardStatsHandler(
             writer,
-            tag_name="val_test1",
+            tag_name="val_total_loss",
             output_transform=lambda x: None,
             global_epoch_transform=lambda x: scheduler.last_epoch
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="val_card_loss",
-            output_transform=lambda x: None,
-            # global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_log=True,
-            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "cards")
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="val_classification_loss",
-            output_transform=lambda x: None,
-            # global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_log=True,
-            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "class")
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="val_edge_loss",
-            output_transform=lambda x: None,
-            #global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_log=True,
-            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "edges")
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="val_node_loss",
-            output_transform=lambda x: None,
-            # global_epoch_transform=lambda x: scheduler.last_epoch,
-            iteration_log=True,
-            epoch_event_writer=lambda engine, tens_writer: write_metric(engine, tens_writer, "nodes")
         ),
         TensorBoardImageHandler(
             writer,
@@ -201,10 +170,43 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
                 output_transform=lambda x: x["loss"]["total"],
             ),
         },
+        additional_metrics={
+            "val_smd": MeanSMD(
+                output_transform=lambda x: (x["nodes"], x["edges"], x["pred_nodes"], x["pred_edges"]),
+            ),
+            "val_node_loss": MeanLoss(
+                output_transform = lambda x: x["loss"]["nodes"],
+            ),
+            "val_class_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["class"],
+            ),
+            "val_edge_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["edges"],
+            ),
+            "val_card_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["cards"],
+            ),
+        },
         val_handlers=val_handlers,
         amp=False,
         loss_function=loss
     )
+
+    """"val_node_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["nodes"],
+            ),
+            "val_class_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["class"],
+            ),
+            "val_edge_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["edges"],
+            ),
+            "val_card_loss": MeanLoss(
+                output_transform=lambda x: x["loss"]["cards"],
+            ),
+            "val_smd": MeanSMD(
+                output_transform=lambda x: x,
+            ),"""
 
     return evaluator
 

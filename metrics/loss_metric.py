@@ -1,17 +1,7 @@
-import torch
-import math
-from torch import nn
-from typing import Callable
-from monai.utils import MetricReduction
-from monai.metrics.utils import do_metric_reduction
-from monai.utils import MetricReduction
 from monai.config import IgniteInfo
 from monai.utils import min_version, optional_import
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence
-from monai.utils import evenly_divisible_all_gather
-from monai.config import TensorOrList
-import pdb
-import warnings
+import torch
 
 reinit__is_reduced, _ = optional_import(
     "ignite.metrics.metric", IgniteInfo.OPT_IMPORT_VERSION, min_version, "reinit__is_reduced"
@@ -36,13 +26,12 @@ class MeanLoss(Metric):
             output_transform (Callable, optional): [description]. Defaults to lambdax:x.
         """        ''''''
         self.metric_fn = lambda x: x
-        self.cur = 0
+        self.losses = []
         super().__init__(output_transform=output_transform,)
 
     @reinit__is_reduced
     def reset(self) -> None:
-        print("resetting")
-        self.cur = 0
+        self.losses = []
 
     @reinit__is_reduced
     def update(self, output) -> None:
@@ -54,9 +43,7 @@ class MeanLoss(Metric):
         Returns:
             [type]: [description]
         """        ''''''
-        print(f"updating: {output}")
-        self.cur = output
-        return self.metric_fn(output)
+        self.losses.append(output)
 
     def compute(self) -> Any:
         """[summary]
@@ -67,8 +54,7 @@ class MeanLoss(Metric):
         Returns:
             Any: [description]
         """        ''''''
-        print("computing")
-        return self.cur
+        return torch.mean(torch.tensor(self.losses))
 
     def attach(self, engine: Engine, name: str) -> None:
         """[summary]
