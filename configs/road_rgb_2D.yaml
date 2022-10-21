@@ -1,8 +1,8 @@
 DATA:
   DIM: 2 # data dimension
-  BATCH_SIZE: 128 #16
+  BATCH_SIZE: 64 #16
   TEST_BATCH_SIZE: 64 #16
-  DATA_PATH: "/home/guests/alexander_berger/20_cities" # Path to dataset, could be overwritten by command line argument
+  DATA_PATH: "/media/data/alex_johannes/data/20cities/train_data" # Path to dataset, could be overwritten by command line argument
   TEST_DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/test_data"
   DATASET: "road_dataset" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
@@ -47,10 +47,10 @@ MODEL:
     # RLN_TOKEN: True
 
     OBJ_TOKEN: 80
-    RLN_TOKEN: 5
+    RLN_TOKEN: 1
     DUMMY_TOKEN: 0
 
-    RLN_ATTN: True # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
+    RLN_ATTN: False # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
 
   MATCHER:
     C_CLASS: 3
@@ -84,5 +84,5 @@ TRAIN:
   W_EDGE: 6.0
 
 log:
-  exp_name: "baseline_upsampling-loss_5rln"
-  message: "baseline_upsampling-loss_5rln"
+  exp_name: "baseline_upsampling-loss"
+  message: "baseline_upsampling-loss"
