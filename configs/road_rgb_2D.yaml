@@ -2,9 +2,9 @@ DATA:
   DIM: 2 # data dimension
   BATCH_SIZE: 128 #16
   TEST_BATCH_SIZE: 64 #16
-  DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/train_data" # Path to dataset, could be overwritten by command line argument
+  DATA_PATH: "/home/guests/alexander_berger/20_cities" # Path to dataset, could be overwritten by command line argument
   TEST_DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/test_data"
-  DATASET: "synthetic_eye_vessel_dataset" # Dataset name
+  DATASET: "road_dataset" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
   NUM_WORKERS: 4 # Number of data loading threads
   SEED: 10 # random seed for reproducibility
@@ -47,7 +47,7 @@ MODEL:
     # RLN_TOKEN: True
 
     OBJ_TOKEN: 80
-    RLN_TOKEN: 1
+    RLN_TOKEN: 5
     DUMMY_TOKEN: 0
 
     RLN_ATTN: True # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
@@ -58,15 +58,17 @@ MODEL:
 
 TRAIN:
   EPOCHS: 180
-  LR: 1e-3
-  LR_BACKBONE: 1e-3
+  LR: 2e-4
+  LR_BACKBONE: 2e-5
   TRAIN_CNN_BACKBONE: True
   TRAIN_ENCODER: True
   TRAIN_DECODER: True
   WEIGHT_DECAY: 1e-3
   LR_DROP: 180
   CLIP_MAX_NORM: 0.1 # hardcoded
-  NUM_EDGE_SAMPLES: 640
+  NUM_EDGE_SAMPLES: 9999
+  EDGE_SAMPLE_RATIO: 0.2
+  EDGE_SAMPLE_RATIO_INTERVAL: 0.025
 
   SAVE_PATH: "./trained_weights/" # save path for the checkpoint, log and val results
   VAL_INTERVAL: 1 # validation interval
@@ -79,8 +81,8 @@ TRAIN:
   W_CLASS: 3.0
   W_CARD: 1.0
   W_NODE: 5.0
-  W_EDGE: 8.0
+  W_EDGE: 6.0
 
 log:
-  exp_name: "pre_2rln"
-  message: "pre_2rln"
+  exp_name: "baseline_upsampling-loss_5rln"
+  message: "baseline_upsampling-loss_5rln"
