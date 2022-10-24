@@ -58,7 +58,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net):
+    def __init__(self, config, matcher, net, edge_upsampling=True):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -82,6 +82,7 @@ class SetCriterion(nn.Module):
                             'nodes':config.TRAIN.W_NODE,
                             'edges':config.TRAIN.W_EDGE,
                             }
+        self.edge_upsampling = edge_upsampling
         
     def loss_class(self, outputs, indices):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -159,7 +160,7 @@ class SetCriterion(nn.Module):
         loss = loss.sum() / num_boxes
         return loss
 
-    def loss_edges(self, h, target_nodes, target_edges, indices, num_edges=80):
+    def loss_edges(self, h, target_nodes, target_edges, indices):
         """Compute the losses related to the masks: the focal loss and the dice loss.
            targets dicts must contain the key "masks" containing a tensor of dim [nb_target_boxes, h, w]
         """
@@ -219,9 +220,9 @@ class SetCriterion(nn.Module):
             neg_edges[shuffle,:] = to_shuffle[:,[1, 0]]
 
             # check whether the number of -ve edges are within limit
-            if num_edges-pos_edge.shape[0]<neg_edges.shape[0]:
-                take_neg = num_edges-pos_edge.shape[0]
-                total_edge = num_edges
+            if self.num_edge_samples-pos_edge.shape[0]<neg_edges.shape[0]:
+                take_neg = self.num_edge_samples-pos_edge.shape[0]
+                total_edge = self.num_edge_samples
             else:
                 take_neg = neg_edges.shape[0]
                 total_edge = pos_edge.shape[0]+neg_edges.shape[0]
@@ -249,8 +250,9 @@ class SetCriterion(nn.Module):
         # valid_edges = torch.argmax(relation_pred, -1)
         # print('valid_edge number', valid_edges.sum())
 
-        relation_pred, edge_labels = \
-            upsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
+        if self.edge_upsampling:
+            relation_pred, edge_labels = \
+                upsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
@@ -283,7 +285,7 @@ class SetCriterion(nn.Module):
         losses['class'] = self.loss_class(out['pred_logits'], indices)
         losses['nodes'] = self.loss_nodes(out['pred_nodes'][...,:2], target['nodes'], indices)
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
-        losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices, num_edges=self.num_edge_samples)
+        losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
         
         losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
