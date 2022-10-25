@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import logging
 import pyvista
 import json
 
