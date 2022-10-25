@@ -58,7 +58,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net, edge_upsampling=True):
+    def __init__(self, config, matcher, net, num_edge_samples, edge_upsampling=True):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -73,7 +73,8 @@ class SetCriterion(nn.Module):
         self.rln_token = config.MODEL.DECODER.RLN_TOKEN
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
-        self.num_edge_samples = config.TRAIN.NUM_EDGE_SAMPLES
+        self.num_edge_samples = num_edge_samples
+        self.edge_upsampling = edge_upsampling
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
@@ -82,7 +83,6 @@ class SetCriterion(nn.Module):
                             'nodes':config.TRAIN.W_NODE,
                             'edges':config.TRAIN.W_EDGE,
                             }
-        self.edge_upsampling = edge_upsampling
         
     def loss_class(self, outputs, indices):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss

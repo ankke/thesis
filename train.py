@@ -78,7 +78,8 @@ def main(args):
     seg_net = build_model(config).to(device)
 
     matcher = build_matcher(config)
-    loss = SetCriterion(config, matcher, net)
+    loss = SetCriterion(config, matcher, net, num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES, edge_upsampling=True)
+    val_loss = SetCriterion(config, matcher, net, num_edge_samples=9999, edge_upsampling=False)
 
     if config.DATA.DATASET == 'road_dataset':
         build_dataset_function = build_road_network_data
@@ -160,14 +161,14 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=20,
+            patience=15,
             score_function=lambda x: -x.state.output["loss"]["total"].item()
     )
 
     evaluator = build_evaluator(
         val_loader,
         net,
-        loss,
+        val_loss,
         optimizer,
         scheduler,
         writer,
