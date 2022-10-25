@@ -78,7 +78,13 @@ def main(args):
     seg_net = build_model(config).to(device)
 
     matcher = build_matcher(config)
-    loss = SetCriterion(config, matcher, net, num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES, edge_upsampling=True)
+    loss = SetCriterion(
+        config,
+        matcher,
+        net,
+        num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
+        edge_upsampling=config.TRAIN.EDGE_UPSAMPLING
+    )
     val_loss = SetCriterion(config, matcher, net, num_edge_samples=9999, edge_upsampling=False)
 
     if config.DATA.DATASET == 'road_dataset':

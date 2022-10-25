@@ -58,7 +58,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net, num_edge_samples, edge_upsampling=True):
+    def __init__(self, config, matcher, net, num_edge_samples=80, edge_upsampling=False):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category

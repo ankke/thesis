@@ -1,9 +1,9 @@
 DATA:
   DIM: 2 # data dimension
-  BATCH_SIZE: 64 #16
+  BATCH_SIZE: 128 #16
   TEST_BATCH_SIZE: 64 #16
-  DATA_PATH: "/media/data/alex_johannes/data/20cities/train_data" # Path to dataset, could be overwritten by command line argument
-  TEST_DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/test_data"
+  DATA_PATH: "/home/guests/alexander_berger/data/synthetic_eye_vessels_small/train_data" # Path to dataset, could be overwritten by command line argument
+  TEST_DATA_PATH: "/media/data/alex_johannes/data/synthetic_eye_vessel/synthetic_eye_vessels_small/test_data"
   DATASET: "road_dataset" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
   NUM_WORKERS: 4 # Number of data loading threads
@@ -35,7 +35,7 @@ MODEL:
     ENC_LAYERS: 3 #4 #2
     DEC_LAYERS: 3 #4 #2
     DIM_FEEDFORWARD: 1024 #128 #512 #2048
-    DROPOUT: 0.1 # 0.0
+    DROPOUT: 0.3 # 0.0
     ACTIVATION: relu
     NUM_FEATURE_LEVELS: 4
     DEC_N_POINTS: 4
@@ -47,7 +47,7 @@ MODEL:
     # RLN_TOKEN: True
 
     OBJ_TOKEN: 80
-    RLN_TOKEN: 1
+    RLN_TOKEN: 2
     DUMMY_TOKEN: 0
 
     RLN_ATTN: False # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
@@ -67,7 +67,8 @@ TRAIN:
   LR_DROP: 180
   CLIP_MAX_NORM: 0.1 # hardcoded
   NUM_EDGE_SAMPLES: 9999
-  EDGE_SAMPLE_RATIO: 0.2
+  EDGE_UPSAMPLING: True # Only combine True with NUM_EDGE_SAMPLES=9999
+  EDGE_SAMPLE_RATIO: 0.1
   EDGE_SAMPLE_RATIO_INTERVAL: 0.025
 
   SAVE_PATH: "./trained_weights/" # save path for the checkpoint, log and val results
@@ -84,5 +85,5 @@ TRAIN:
   W_EDGE: 6.0
 
 log:
-  exp_name: "baseline_upsampling-loss"
-  message: "baseline_upsampling-loss"
+  exp_name: "final_baseline-2rln_upsampling-loss1e-1_dropout3e-1_reg1e-3"
+  message: "final_baseline-2rln_upsampling-loss1e-1_dropout3e-1_reg1e-3"
