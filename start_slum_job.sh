@@ -21,6 +21,6 @@ source /home/guests/alexander_berger/relationformer/env/bin/activate
 
 #python ~/relationformer/train.py --config ~/relationformer/configs/road_rgb_2D.yaml
 #python ~/relationformer/models/ops/setup.py install
-python /home/guests/alexander_berger/relationformer/train.py --config /home/guests/alexander_berger/relationformer/configs/experiments/$1.yaml
+python /home/guests/alexander_berger/relationformer/train.py --config /home/guests/alexander_berger/relationformer/configs/experiments/$1.yaml --resume /home/guests/alexander_berger/relationformer/trained_weights/supro/20_US_cities_checkpoint_epoch=80.pt
 exit 0
 EOT
