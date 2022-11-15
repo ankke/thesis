@@ -37,7 +37,12 @@ class RelationFormer(nn.Module):
         self.bbox_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM, config.MODEL.DECODER.HIDDEN_DIM, 4, 3)
         
         if config.MODEL.DECODER.RLN_TOKEN > 0:
-            self.relation_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM*3, config.MODEL.DECODER.HIDDEN_DIM, 2, 3)
+            self.relation_embed = MLP(
+                config.MODEL.DECODER.HIDDEN_DIM*(2 + config.MODEL.DECODER.RLN_TOKEN),
+                config.MODEL.DECODER.HIDDEN_DIM,
+                2,
+                3
+            )
         else:
             self.relation_embed = MLP(config.MODEL.DECODER.HIDDEN_DIM*2, config.MODEL.DECODER.HIDDEN_DIM, 2, 3)
 
@@ -46,8 +51,8 @@ class RelationFormer(nn.Module):
         if self.num_feature_levels > 1:
             num_backbone_outs = len(backbone.strides)
             input_proj_list = []
-            for _ in range(num_backbone_outs):
-                in_channels = self.encoder.num_channels[_]
+            for i in range(num_backbone_outs):
+                in_channels = self.encoder.num_channels[i]
                 input_proj_list.append(nn.Sequential(
                     nn.Conv2d(in_channels, self.hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, self.hidden_dim),
@@ -77,9 +82,10 @@ class RelationFormer(nn.Module):
             samples = nested_tensor_from_tensor_list(samples)
         elif seg:
             samples = nested_tensor_from_tensor_list([tensor.expand(3, -1, -1).contiguous() for tensor in samples])
-        # Deformable Transformer backbone
+
+        # CNN backbone
         features, pos = self.encoder(samples)
-        
+
         # Create 
         srcs = []
         masks = []

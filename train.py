@@ -1,18 +1,20 @@
 import os
 import yaml
 import json
+import shutil
 from argparse import ArgumentParser
 from monai.handlers import EarlyStopHandler
 import torch
 from monai.data import DataLoader
-from dataset_road_network import build_road_network_data
-from evaluator import build_evaluator
-from trainer import build_trainer
+from data.dataset_road_network import build_road_network_data
+from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
+from training.evaluator import build_evaluator
+from training.trainer import build_trainer
 from models import build_model
-from utils import image_graph_collate_road_network
+from utils.utils import image_graph_collate_road_network
 from torch.utils.tensorboard import SummaryWriter
 from models.matcher import build_matcher
-from losses import SetCriterion
+from training.losses import SetCriterion
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 
 parser = ArgumentParser()
@@ -26,7 +28,7 @@ parser.add_argument('--seg_net', default=None,
                     help='checkpoint of the segmentation model')
 parser.add_argument('--device', default='cuda',
                     help='device to use for training')
-parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0, 1],
+parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
                     help='list of index where skip conn will be made')
 parser.add_argument('--no_recover_optim', default=True, action="store_false",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
@@ -50,17 +52,19 @@ def main(args):
         config = yaml.load(f, Loader=yaml.FullLoader)
         print(config['log']['message'])
     config = dict2obj(config)
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
-        map(str, args.cuda_visible_device))
+    if args.cuda_visible_device:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
+            map(str, args.cuda_visible_device))
+        print(os.environ["CUDA_VISIBLE_DEVICES"])
 
     exp_path = os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (
         config.log.exp_name, config.DATA.SEED))
-    if os.path.exists(exp_path) and args.resume == None:
+    if os.path.exists(exp_path):
         print('ERROR: Experiment folder exist, please change exp name in config file')
     else:
         try:
             os.makedirs(exp_path)
-            copyfile(args.config, os.path.join(exp_path, "config.yaml"))
+            shutil.copyfile(args.config, os.path.join(exp_path, "config.yaml"))
         except:
             pass
 
@@ -74,9 +78,21 @@ def main(args):
     seg_net = build_model(config).to(device)
 
     matcher = build_matcher(config)
-    loss = SetCriterion(config, matcher, net)
+    loss = SetCriterion(
+        config,
+        matcher,
+        net,
+        num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
+        edge_upsampling=config.TRAIN.EDGE_UPSAMPLING
+    )
+    val_loss = SetCriterion(config, matcher, net, num_edge_samples=9999, edge_upsampling=False)
 
-    train_ds, val_ds = build_road_network_data(
+    if config.DATA.DATASET == 'road_dataset':
+        build_dataset_function = build_road_network_data
+    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
+        build_dataset_function = build_synthetic_vessel_network_data
+
+    train_ds, val_ds = build_dataset_function(
         config, mode='split'
     )
 
@@ -151,13 +167,15 @@ def main(args):
     )
 
     early_stop_handler = EarlyStopHandler(
-            patience=20,
-            score_function=lambda x: -x.state.metrics["val_smd"]
+            patience=15,
+            score_function=lambda x: -x.state.output["loss"]["total"].item()
     )
 
     evaluator = build_evaluator(
         val_loader,
-        net, optimizer,
+        net,
+        val_loss,
+        optimizer,
         scheduler,
         writer,
         config,
