@@ -8,7 +8,7 @@ import os
 import json
 from argparse import ArgumentParser
 
-patch_size = [128, 128, 1]
+patch_size = [64, 64, 1]
 pad = [5, 5, 0]
 
 
@@ -124,8 +124,8 @@ def patch_extract(save_path, image, seg,  mesh, device=None):
     p_w = p_w - 2*pad_w
 
     h, w, d = image.shape
-    x_ = np.int32(np.linspace(5, h-5-p_h, 32))
-    y_ = np.int32(np.linspace(5, w-5-p_w, 32))
+    x_ = np.int32(np.linspace(5, h-5-p_h, 64))
+    y_ = np.int32(np.linspace(5, w-5-p_w, 64))
 
     ind = np.meshgrid(x_, y_, indexing='ij')
     # Center Crop based on foreground
@@ -315,7 +315,7 @@ def generate_data(args):
             indrange_test.append(x)
 
     image_id = 1
-    """
+
     train_path = f"{target_dir}/train_data/"
     if not os.path.isdir(train_path):
         os.makedirs(train_path)
@@ -358,7 +358,7 @@ def generate_data(args):
         mesh.lines = patch_edge.flatten()
 
         patch_extract(train_path, sat_img, gt_seg, mesh)
-    """
+
     image_id = 1
     test_path = f"{target_dir}/test_data/"
     if not os.path.isdir(test_path):
