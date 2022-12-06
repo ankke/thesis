@@ -9,7 +9,7 @@ import json
 from argparse import ArgumentParser
 
 patch_size = [64, 64, 1]
-pad = [5, 5, 0]
+pad = [20, 20, 0]
 
 
 def angle(v1, v2):
