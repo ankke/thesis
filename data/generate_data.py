@@ -11,6 +11,9 @@ from argparse import ArgumentParser
 patch_size = [64, 64, 1]
 pad = [20, 20, 0]
 
+total_min = 1
+total_max = 0
+
 
 def angle(v1, v2):
     unit_vector_1 = v1 / np.linalg.norm(v1)
@@ -84,6 +87,9 @@ def save_input(path, idx, patch, patch_seg, patch_coord, patch_edge):
         patch_coord ([type]): [description]
         patch_edge ([type]): [description]
     """
+
+    global total_min
+    global total_max
     imageio.imwrite(path+'raw/sample_'+str(idx).zfill(6)+'_data.png', patch)
     imageio.imwrite(path+'seg/sample_'+str(idx).zfill(6)+'_seg.png', patch_seg)
 
@@ -98,7 +104,14 @@ def save_input(path, idx, patch, patch_seg, patch_coord, patch_edge):
     patch_edge = np.concatenate(
         (np.int32(2*np.ones((patch_edge.shape[0], 1))), patch_edge), 1)
     mesh = pyvista.PolyData(patch_coord)
-    # print(patch_edge.shape)
+    cur_min = np.min(patch_coord[:, :2])
+    cur_max = np.max(patch_coord[:, :2])
+    if cur_min < total_min:
+        total_min = cur_min
+        print(total_min)
+    if cur_max > total_max:
+        total_max = cur_max
+        print(total_max)
     mesh.lines = patch_edge.flatten()
     mesh.save(path+'vtp/sample_'+str(idx).zfill(6)+'_graph.vtp')
 
