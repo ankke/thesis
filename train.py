@@ -24,6 +24,7 @@ parser.add_argument('--config',
                          'If None, use the nnU-Net config. See /config for examples.')
 parser.add_argument('--resume', default=None,
                     help='checkpoint of the last epoch of the model')
+parser.add_argument('--restore_state', dest='restore_state', help='whether the state should be restored', action='store_true')
 parser.add_argument('--seg_net', default=None,
                     help='checkpoint of the segmentation model')
 parser.add_argument('--device', default='cuda',
@@ -32,6 +33,7 @@ parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
                     help='list of index where skip conn will be made')
 parser.add_argument('--no_recover_optim', default=True, action="store_false",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
+parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
 
 
 class obj:
@@ -50,8 +52,10 @@ def main(args):
         print('\n*** Config file')
         print(args.config)
         config = yaml.load(f, Loader=yaml.FullLoader)
-        print(config['log']['message'])
+        print(args.exp_name)
     config = dict2obj(config)
+    config.log.exp_name = args.exp_name
+
     if args.cuda_visible_device:
         os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(
             map(str, args.cuda_visible_device))
@@ -142,9 +146,10 @@ def main(args):
         net.load_state_dict(checkpoint['net'])
         if config.TRAIN.RECOVER_OPTIMIZER_STATE:
             optimizer.load_state_dict(checkpoint['optimizer'])
-        scheduler.load_state_dict(checkpoint['scheduler'])
-        last_epoch = scheduler.last_epoch
-        scheduler.step_size = config.TRAIN.LR_DROP
+        if args.restore_state:
+            scheduler.load_state_dict(checkpoint['scheduler'])
+            last_epoch = scheduler.last_epoch
+            scheduler.step_size = config.TRAIN.LR_DROP
 
     for param_group in optimizer.param_groups:
         print(f'lr: {param_group["lr"]}, number of params: {len(param_group["params"])}')
@@ -198,7 +203,7 @@ def main(args):
 
     early_stop_handler.set_trainer(trainer)
 
-    if args.resume:
+    if args.resume and args.restore_state:
         evaluator.state.epoch = last_epoch
         trainer.state.epoch = last_epoch
         trainer.state.iteration = trainer.state.epoch_length * last_epoch
