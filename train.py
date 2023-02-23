@@ -34,6 +34,7 @@ parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
 parser.add_argument('--no_recover_optim', default=True, action="store_false",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
 parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
+parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
 
 
 class obj:
@@ -97,7 +98,7 @@ def main(args):
         build_dataset_function = build_synthetic_vessel_network_data
 
     train_ds, val_ds = build_dataset_function(
-        config, mode='split'
+        config, mode='split', max_samples=args.max_samples
     )
 
     train_loader = DataLoader(train_ds,
@@ -171,10 +172,10 @@ def main(args):
             config.log.exp_name, config.DATA.SEED)),
     )
 
-    early_stop_handler = EarlyStopHandler(
+    """early_stop_handler = EarlyStopHandler(
             patience=15,
             score_function=lambda x: -x.state.output["loss"]["total"].item()
-    )
+    )"""
 
     evaluator = build_evaluator(
         val_loader,
@@ -185,7 +186,7 @@ def main(args):
         writer,
         config,
         device,
-        early_stop_handler
+        #early_stop_handler
     )
     trainer = build_trainer(
         train_loader,
@@ -201,7 +202,7 @@ def main(args):
         # fp16=args.fp16,
     )
 
-    early_stop_handler.set_trainer(trainer)
+    #early_stop_handler.set_trainer(trainer)
 
     if args.resume and args.restore_state:
         evaluator.state.epoch = last_epoch

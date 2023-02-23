@@ -113,7 +113,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
 
 
-def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config, device, early_stop_handler):
+def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config, device, early_stop_handler=None):
     """[summary]
 
     Args:
@@ -125,7 +125,7 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         [type]: [description]
     """
     val_handlers = [
-        early_stop_handler,
+        #early_stop_handler,
         StatsHandler(output_transform=lambda x: None),
         CheckpointSaver(
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),

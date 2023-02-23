@@ -85,7 +85,7 @@ class Sat2GraphDataLoader(Dataset):
         return image_data, seg_data-0.5, coordinates[:, :2], lines[:, 1:]
 
 
-def build_road_network_data(config, mode='train', split=0.95):
+def build_road_network_data(config, mode='train', split=0.95, max_samples=0):
     """[summary]
 
     Args:
@@ -162,6 +162,11 @@ def build_road_network_data(config, mode='train', split=0.95):
         train_split = int(split*len(data_dicts))
         train_files, val_files = data_dicts[:
                                             train_split], data_dicts[train_split:]
+
+        if max_samples > 0:
+            train_files = train_files[:max_samples]
+            val_files = val_files[:round(max_samples * (1 - split))]
+            
         train_ds = Sat2GraphDataLoader(
             data=train_files,
             transform=train_transform,
