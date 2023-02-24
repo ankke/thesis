@@ -46,9 +46,9 @@ class BBoxEvaluator:
         self.metrics = [
             Metric(
                 classes=classes,
-                iou_list=np.arange(0.1, 1.0, 0.1),  # for individual APs
-                iou_range=(0.5, 0.95, 0.05), # for mAP - different from coco (0.5, 0.95, 0.05)
-                per_class=True,
+                iou_list=np.arange(0.05, 1.0, 0.05),  # for individual APs
+                iou_ranges=[(0.05, 0.5, 0.05), (0.5, 0.95, 0.05)],  # for mAP - different from coco (0.5, 0.95, 0.05)
+                per_class=False,
                 max_detection=(100, ) # different from nndet (100, )
             )
         ]
@@ -110,7 +110,6 @@ class BBoxEvaluator:
             self.iou_fn, self.iou_thresholds, pred_boxes=pred_boxes, pred_classes=pred_classes,
             pred_scores=pred_scores, gt_boxes=gt_boxes, gt_classes=gt_classes, gt_ignore=gt_ignore,
             max_detections=self.max_detections))
-
         return {}
 
     def eval(self):
@@ -125,7 +124,6 @@ class BBoxEvaluator:
         for metric_idx, metric in enumerate(self.metrics):
             _filter = partial(self.iou_filter, iou_idx=self.iou_mapping[metric_idx])
             iou_filtered_results = list(map(_filter, self.results_list))    # no filtering
-            
             score, curve = metric(iou_filtered_results)
             
             if score is not None:
@@ -428,7 +426,7 @@ class Metric:
         self,
         classes,
         iou_list=(0.1, 0.5, 0.75),
-        iou_range=(0.1, 0.5, 0.05),
+        iou_ranges=[(0.1, 0.5, 0.05)],
         max_detection=(1, 5, 100),
         per_class=True
     ):
@@ -448,18 +446,26 @@ class Metric:
         self.per_class = per_class
 
         iou_list = np.array(iou_list)
-        _iou_range = np.linspace(
-            iou_range[0], iou_range[1], int(np.round((iou_range[1] - iou_range[0]) / iou_range[2])) + 1, endpoint=True
-        )
-        self.iou_thresholds = np.union1d(iou_list, _iou_range)
-        self.iou_range = iou_range
+        self.iou_thresholds = iou_list
+        for iou_range in iou_ranges:
+            _iou_range = np.linspace(
+                iou_range[0], iou_range[1], int(np.round((iou_range[1] - iou_range[0]) / iou_range[2])) + 1, endpoint=True
+            )
+            self.iou_thresholds = np.union1d(self.iou_thresholds, _iou_range)
+        self.iou_ranges = iou_ranges
 
         # get indices of iou values of ious range and ious list for later evaluation
         self.iou_list_idx = np.nonzero(iou_list[:, np.newaxis] == self.iou_thresholds[np.newaxis])[1]
-        self.iou_range_idx = np.nonzero(_iou_range[:, np.newaxis] == self.iou_thresholds[np.newaxis])[1]
+
+        self.iou_range_idxs = []
+        for iou_range in iou_ranges:
+            _iou_range = np.linspace(
+                iou_range[0], iou_range[1], int(np.round((iou_range[1] - iou_range[0]) / iou_range[2])) + 1,
+                endpoint=True
+            )
+            self.iou_range_idxs.append(np.nonzero(_iou_range[:, np.newaxis] == self.iou_thresholds[np.newaxis])[1])
 
         assert (self.iou_thresholds[self.iou_list_idx] == iou_list).all()
-        assert (self.iou_thresholds[self.iou_range_idx] == _iou_range).all()
 
         self.recall_thresholds = np.linspace(.0, 1.00, int(np.round((1.00 - .0) / .01)) + 1, endpoint=True)
         self.max_detections = max_detection
@@ -518,17 +524,17 @@ class Metric:
                 `dtIgnore`: detections which should be ignored [T, D], indicate which detections should be ignored
         """
         results = {}
-        if self.iou_range:  # mAP
-            key = (f"mAP_IoU_{self.iou_range[0]:.2f}_{self.iou_range[1]:.2f}_{self.iou_range[2]:.2f}_"
+        for i, iou_range in enumerate(self.iou_ranges):  # mAP
+            key = (f"mAP_IoU_{iou_range[0]:.2f}_{iou_range[1]:.2f}_{iou_range[2]:.2f}_"
                    f"MaxDet_{self.max_detections[-1]}")
-            results[key] = self.select_ap(dataset_statistics, iou_idx=self.iou_range_idx, max_det_idx=-1)
+            results[key] = self.select_ap(dataset_statistics, iou_idx=self.iou_range_idxs[i], max_det_idx=-1)
 
             if self.per_class:
                 for cls_idx, cls_str in enumerate(self.classes):  # per class results
                     key = (f"{cls_str}_"
-                           f"mAP_IoU_{self.iou_range[0]:.2f}_{self.iou_range[1]:.2f}_{self.iou_range[2]:.2f}_"
+                           f"mAP_IoU_{iou_range[0]:.2f}_{iou_range[1]:.2f}_{iou_range[2]:.2f}_"
                            f"MaxDet_{self.max_detections[-1]}")
-                    results[key] = self.select_ap(dataset_statistics, iou_idx=self.iou_range_idx,
+                    results[key] = self.select_ap(dataset_statistics, iou_idx=self.iou_range_idxs[i],
                                                   cls_idx=cls_idx, max_det_idx=-1)
 
         for idx in self.iou_list_idx:   # AP@IoU
@@ -560,16 +566,17 @@ class Metric:
         """
         results = {}
         for max_det_idx, max_det in enumerate(self.max_detections):  # mAR
-            key = f"mAR_IoU_{self.iou_range[0]:.2f}_{self.iou_range[1]:.2f}_{self.iou_range[2]:.2f}_MaxDet_{max_det}"
-            results[key] = self.select_ar(dataset_statistics, max_det_idx=max_det_idx, iou_idx=self.iou_range_idx)
+            for i, iou_range in enumerate(self.iou_ranges):
+                key = f"mAR_IoU_{iou_range[0]:.2f}_{iou_range[1]:.2f}_{iou_range[2]:.2f}_MaxDet_{max_det}"
+                results[key] = self.select_ar(dataset_statistics, max_det_idx=max_det_idx, iou_idx=self.iou_range_idxs[i])
 
-            if self.per_class:
-                for cls_idx, cls_str in enumerate(self.classes):  # per class results
-                    key = (f"{cls_str}_"
-                           f"mAR_IoU_{self.iou_range[0]:.2f}_{self.iou_range[1]:.2f}_{self.iou_range[2]:.2f}_"
-                           f"MaxDet_{max_det}")
-                    results[key] = self.select_ar(dataset_statistics,
-                                                  cls_idx=cls_idx, max_det_idx=max_det_idx, iou_idx=self.iou_range_idx)
+                if self.per_class:
+                    for cls_idx, cls_str in enumerate(self.classes):  # per class results
+                        key = (f"{cls_str}_"
+                               f"mAR_IoU_{iou_range[0]:.2f}_{iou_range[1]:.2f}_{iou_range[2]:.2f}_"
+                               f"MaxDet_{max_det}")
+                        results[key] = self.select_ar(dataset_statistics,
+                                                      cls_idx=cls_idx, max_det_idx=max_det_idx, iou_idx=self.iou_range_idxs[i])
 
         for idx in self.iou_list_idx:   # AR@IoU
             key = f"AR_IoU_{self.iou_thresholds[idx]:.2f}_MaxDet_{self.max_detections[-1]}"
@@ -610,11 +617,12 @@ class Metric:
         """
         prec = dataset_statistics["precision"]
         if iou_idx is not None:
-            prec = prec[iou_idx]
+            prec = prec[:, iou_idx]
         if cls_idx is not None:
             prec = prec[..., cls_idx, :]
         prec = prec[..., max_det_idx]
-        return np.mean(prec)
+        prec = np.mean(prec, axis=tuple(range(1, len(prec.shape))))
+        return np.mean(prec), np.std(prec)
 
     @staticmethod
     def select_ar(
@@ -642,16 +650,21 @@ class Metric:
         """
         rec = dataset_statistics["recall"]
         if iou_idx is not None:
-            rec = rec[iou_idx]
+            rec = rec[:, iou_idx]
         if cls_idx is not None:
             rec = rec[..., cls_idx, :]
         rec = rec[..., max_det_idx]
 
         if len(rec[rec > -1]) == 0:
             rec = -1
+            std = -1
         else:
-            rec = np.mean(rec[rec > -1])
-        return rec
+            recs = np.zeros(rec.shape[0])
+            for i, single_rec in enumerate(rec):
+                recs[i] = np.mean(single_rec[single_rec > -1])
+            rec = np.mean(recs)
+            std = np.std(recs)
+        return rec, std
     
     def check_number_of_iou(self, *args) -> None:
         """
@@ -692,11 +705,12 @@ class Metric:
         num_recall_th = len(self.recall_thresholds)
         num_classes = len(self.classes)
         num_max_detections = len(self.max_detections)
+        num_samples = len(results_list)
 
         # -1 for the precision of absent categories
-        precision = -np.ones((num_iou_th, num_recall_th, num_classes, num_max_detections))
-        recall = -np.ones((num_iou_th, num_classes, num_max_detections))
-        scores = -np.ones((num_iou_th, num_recall_th, num_classes, num_max_detections))
+        precision = -np.ones((num_samples, num_iou_th, num_recall_th, num_classes, num_max_detections))
+        recall = -np.ones((num_samples, num_iou_th, num_classes, num_max_detections))
+        scores = -np.ones((num_samples, num_iou_th, num_recall_th, num_classes, num_max_detections))
 
         for cls_idx, cls_i in enumerate(self.classes):  # for each class
             for maxDet_idx, maxDet in enumerate(self.max_detections):  # for each maximum number of detections
@@ -705,35 +719,35 @@ class Metric:
                 if len(results) == 0:
                     continue
 
-                dt_scores = np.concatenate([r['dtScores'][0:maxDet] for r in results])  # get class dt scores 
+                for no, r in enumerate(results):
+                    dt_scores = np.concatenate([r['dtScores'][0:maxDet]])  # get class dt scores
+                    # different sorting method generates slightly different results.
+                    # mergesort is used to be consistent as Matlab implementation.
+                    inds = np.argsort(-dt_scores, kind='mergesort')
+                    dt_scores_sorted = dt_scores[inds]  # scores sorte by value
 
-                # different sorting method generates slightly different results.
-                # mergesort is used to be consistent as Matlab implementation.
-                inds = np.argsort(-dt_scores, kind='mergesort')
-                dt_scores_sorted = dt_scores[inds]  # scores sorte by value
+                    # r['dtMatches'] [T, R], where R = sum(all detections) and T = iou_thresholds + sorted by score
+                    dt_matches = np.concatenate([r['dtMatches'][:, 0:maxDet]], axis=1)[:, inds]
+                    dt_ignores = np.concatenate([r['dtIgnore'][:, 0:maxDet]], axis=1)[:, inds]
+                    self.check_number_of_iou(dt_matches, dt_ignores)
+                    gt_ignore = np.concatenate([r['gtIgnore']])
+                    num_gt = np.count_nonzero(gt_ignore == 0)  # number of ground truth boxes (non ignored)
+                    if num_gt == 0:
+                        continue
 
-                # r['dtMatches'] [T, R], where R = sum(all detections) and T = iou_thresholds + sorted by score
-                dt_matches = np.concatenate([r['dtMatches'][:, 0:maxDet] for r in results], axis=1)[:, inds]
-                dt_ignores = np.concatenate([r['dtIgnore'][:, 0:maxDet] for r in results], axis=1)[:, inds]
-                self.check_number_of_iou(dt_matches, dt_ignores)
-                gt_ignore = np.concatenate([r['gtIgnore'] for r in results])
-                num_gt = np.count_nonzero(gt_ignore == 0)  # number of ground truth boxes (non ignored)
-                if num_gt == 0:
-                    continue
+                    # ignore cases need to be handled differently for tp and fp
+                    tps = np.logical_and(dt_matches,  np.logical_not(dt_ignores))
+                    fps = np.logical_and(np.logical_not(dt_matches), np.logical_not(dt_ignores))
 
-                # ignore cases need to be handled differently for tp and fp
-                tps = np.logical_and(dt_matches,  np.logical_not(dt_ignores))
-                fps = np.logical_and(np.logical_not(dt_matches), np.logical_not(dt_ignores))
+                    tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float32)
+                    fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float32)
 
-                tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float32)
-                fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float32)
-
-                for th_ind, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):  # for each threshold th_ind
-                    tp, fp = np.array(tp), np.array(fp)
-                    r, p, s = compute_stats_single_threshold(tp, fp, dt_scores_sorted, self.recall_thresholds, num_gt)
-                    recall[th_ind, cls_idx, maxDet_idx] = r
-                    precision[th_ind, :, cls_idx, maxDet_idx] = p   # basically the precision recall curve
-                    scores[th_ind, :, cls_idx, maxDet_idx] = s      # corresponding score thresholds for recall steps
+                    for th_ind, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):  # for each threshold th_ind
+                        tp, fp = np.array(tp), np.array(fp)
+                        r, p, s = compute_stats_single_threshold(tp, fp, dt_scores_sorted, self.recall_thresholds, num_gt)
+                        recall[no, th_ind, cls_idx, maxDet_idx] = r
+                        precision[no, th_ind, :, cls_idx, maxDet_idx] = p   # basically the precision recall curve
+                        scores[no, th_ind, :, cls_idx, maxDet_idx] = s      # corresponding score thresholds for recall steps
 
         return {
             'counts': [num_iou_th, num_recall_th, num_classes, num_max_detections],  # [4]
@@ -798,5 +812,4 @@ def compute_stats_single_threshold(
             th_scores[save_idx] = dt_scores_sorted[array_index]
     except:
         pass
-
     return recall, np.array(precision), np.array(th_scores)

@@ -59,12 +59,13 @@ def test(args):
     import numpy as np
 
     from data.dataset_road_network import build_road_network_data
+    from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
     from models import build_model
     from training.inference import relation_infer
     from metrics.metric_smd import StreetMoverDistance
     from metrics.metric_map import BBoxEvaluator
     from utils.box_ops_2D import box_cxcywh_to_xyxy_np
-    from utils import image_graph_collate_road_network
+    from utils.utils import image_graph_collate_road_network
     from metrics.topo import compute_topo
 
     torch.backends.cudnn.benchmark = True
@@ -74,7 +75,12 @@ def test(args):
 
     net = build_model(config).to(device)
 
-    test_ds = build_road_network_data(
+    if config.DATA.DATASET == 'road_dataset':
+        build_dataset_function = build_road_network_data
+    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
+        build_dataset_function = build_synthetic_vessel_network_data
+
+    test_ds = build_dataset_function(
         config, mode='test'
     )
 
@@ -101,7 +107,7 @@ def test(args):
     topo_results = []
     with torch.no_grad():
         print('Started processing test set.')
-        for batchdata in tqdm(test_loader):
+        for i, batchdata in enumerate(tqdm(test_loader)):
 
             # extract data and put to device
             images, segs, nodes, edges = batchdata[0], batchdata[1], batchdata[2], batchdata[3]
@@ -152,10 +158,13 @@ def test(args):
             
             for node_, edge_, pred_node_, pred_edge_ in zip(nodes, edges, pred_nodes, pred_edges):
                 topo_results.append(compute_topo(node_.cpu(), edge_.cpu(), pred_node_, pred_edge_))
-    
-    pdb.set_trace()
+
+            """if i > 2:
+                break"""
+
     topo_array=np.array(topo_results)
-    print(topo_array.mean(0))
+    print(f'topo mean: {topo_array.mean(0)}')
+    print(f'topo std: {topo_array.std(0)}')
     # Determine smd
     smd_mean = torch.tensor(smd_results).mean().item()
     smd_std = torch.tensor(smd_results).std().item()
@@ -163,51 +172,12 @@ def test(args):
 
     # Determine node box ap / ar
     node_metric_scores = metric_node_map.eval()
-    print(f"node mAP_IoU_0.50_0.95_0.05_MaxDet_100 {node_metric_scores['mAP_IoU_0.50_0.95_0.05_MaxDet_100']}")
-    print(f"node AP_IoU_0.10_MaxDet_100 {node_metric_scores['AP_IoU_0.10_MaxDet_100']}")
-    print(f"node AP_IoU_0.20_MaxDet_100 {node_metric_scores['AP_IoU_0.20_MaxDet_100']}")
-    print(f"node AP_IoU_0.30_MaxDet_100 {node_metric_scores['AP_IoU_0.30_MaxDet_100']}")
-    print(f"node AP_IoU_0.40_MaxDet_100 {node_metric_scores['AP_IoU_0.40_MaxDet_100']}")
-    print(f"node AP_IoU_0.50_MaxDet_100 {node_metric_scores['AP_IoU_0.50_MaxDet_100']}")
-    print(f"node AP_IoU_0.60_MaxDet_100 {node_metric_scores['AP_IoU_0.60_MaxDet_100']}")
-    print(f"node AP_IoU_0.70_MaxDet_100 {node_metric_scores['AP_IoU_0.70_MaxDet_100']}")
-    print(f"node AP_IoU_0.80_MaxDet_100 {node_metric_scores['AP_IoU_0.80_MaxDet_100']}")
-    print(f"node AP_IoU_0.90_MaxDet_100 {node_metric_scores['AP_IoU_0.90_MaxDet_100']}\n")
-
-    print(f"node mAR_IoU_0.50_0.95_0.05_MaxDet_100 {node_metric_scores['mAR_IoU_0.50_0.95_0.05_MaxDet_100']}")
-    print(f"node AR_IoU_0.10_MaxDet_100 {node_metric_scores['AR_IoU_0.10_MaxDet_100']}")
-    print(f"node AR_IoU_0.20_MaxDet_100 {node_metric_scores['AR_IoU_0.20_MaxDet_100']}")
-    print(f"node AR_IoU_0.30_MaxDet_100 {node_metric_scores['AR_IoU_0.30_MaxDet_100']}")
-    print(f"node AR_IoU_0.40_MaxDet_100 {node_metric_scores['AR_IoU_0.40_MaxDet_100']}")
-    print(f"node AR_IoU_0.50_MaxDet_100 {node_metric_scores['AR_IoU_0.50_MaxDet_100']}")
-    print(f"node AR_IoU_0.60_MaxDet_100 {node_metric_scores['AR_IoU_0.60_MaxDet_100']}")
-    print(f"node AR_IoU_0.70_MaxDet_100 {node_metric_scores['AR_IoU_0.70_MaxDet_100']}")
-    print(f"node AR_IoU_0.80_MaxDet_100 {node_metric_scores['AR_IoU_0.80_MaxDet_100']}")
-    print(f"node AR_IoU_0.90_MaxDet_100 {node_metric_scores['AR_IoU_0.90_MaxDet_100']}\n")
-
-    # Determine edge box ap / ar
     edge_metric_scores = metric_edge_map.eval()
-    print(f"edge mAP_IoU_0.50_0.95_0.05_MaxDet_100 {edge_metric_scores['mAP_IoU_0.50_0.95_0.05_MaxDet_100']}")
-    print(f"edge AP_IoU_0.10_MaxDet_100 {edge_metric_scores['AP_IoU_0.10_MaxDet_100']}")
-    print(f"edge AP_IoU_0.20_MaxDet_100 {edge_metric_scores['AP_IoU_0.20_MaxDet_100']}")
-    print(f"edge AP_IoU_0.30_MaxDet_100 {edge_metric_scores['AP_IoU_0.30_MaxDet_100']}")
-    print(f"edge AP_IoU_0.40_MaxDet_100 {edge_metric_scores['AP_IoU_0.40_MaxDet_100']}")
-    print(f"edge AP_IoU_0.50_MaxDet_100 {edge_metric_scores['AP_IoU_0.50_MaxDet_100']}")
-    print(f"edge AP_IoU_0.60_MaxDet_100 {edge_metric_scores['AP_IoU_0.60_MaxDet_100']}")
-    print(f"edge AP_IoU_0.70_MaxDet_100 {edge_metric_scores['AP_IoU_0.70_MaxDet_100']}")
-    print(f"edge AP_IoU_0.80_MaxDet_100 {edge_metric_scores['AP_IoU_0.80_MaxDet_100']}")
-    print(f"edge AP_IoU_0.90_MaxDet_100 {edge_metric_scores['AP_IoU_0.90_MaxDet_100']}\n")
-
-    print(f"edge mAR_IoU_0.50_0.95_0.05_MaxDet_100 {edge_metric_scores['mAR_IoU_0.50_0.95_0.05_MaxDet_100']}")
-    print(f"edge AR_IoU_0.10_MaxDet_100 {edge_metric_scores['AR_IoU_0.10_MaxDet_100']}")
-    print(f"edge AR_IoU_0.20_MaxDet_100 {edge_metric_scores['AR_IoU_0.20_MaxDet_100']}")
-    print(f"edge AR_IoU_0.30_MaxDet_100 {edge_metric_scores['AR_IoU_0.30_MaxDet_100']}")
-    print(f"edge AR_IoU_0.40_MaxDet_100 {edge_metric_scores['AR_IoU_0.40_MaxDet_100']}")
-    print(f"edge AR_IoU_0.50_MaxDet_100 {edge_metric_scores['AR_IoU_0.50_MaxDet_100']}")
-    print(f"edge AR_IoU_0.60_MaxDet_100 {edge_metric_scores['AR_IoU_0.60_MaxDet_100']}")
-    print(f"edge AR_IoU_0.70_MaxDet_100 {edge_metric_scores['AR_IoU_0.70_MaxDet_100']}")
-    print(f"edge AR_IoU_0.80_MaxDet_100 {edge_metric_scores['AR_IoU_0.80_MaxDet_100']}")
-    print(f"edge AR_IoU_0.90_MaxDet_100 {edge_metric_scores['AR_IoU_0.90_MaxDet_100']}\n")
+    print("Node scores")
+    print(json.dumps(node_metric_scores, sort_keys=True, indent=4))
+    print("####################################################################################")
+    print("Edge scores")
+    print(json.dumps(edge_metric_scores, sort_keys=True, indent=4))
 
 
 if __name__ == '__main__':
