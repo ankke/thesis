@@ -4,6 +4,7 @@ import json
 from argparse import ArgumentParser
 import pdb
 import numpy as np
+import networkx as nx
 parser = ArgumentParser()
 parser.add_argument('--config',
                     default=None,
@@ -14,6 +15,7 @@ parser.add_argument('--device', default='cuda',
                         help='device to use for training')
 parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0,1],
                         help='list of index where skip conn will be made.')
+parser.add_argument('--save_path', default=None, help='checkpoint of the model to test.')
 
 
 class obj:
@@ -105,6 +107,7 @@ def test(args):
     metric_edge_map = BBoxEvaluator(['edge'], max_detections=100)
 
     topo_results = []
+    beta_errors = []
     with torch.no_grad():
         print('Started processing test set.')
         for i, batchdata in enumerate(tqdm(test_loader)):
@@ -135,6 +138,21 @@ def test(args):
                 gt_classes=[np.ones((nodes_.shape[0],)) for nodes_ in nodes]
             )
 
+            # Calculate betti scores
+            for nodes_sample, edges_sample, pred_nodes_sample, pred_edges_sample in zip(nodes, edges, pred_nodes, pred_edges):
+                G1 = nx.Graph()
+                G1.add_nodes_from([i for i, n in enumerate(nodes_sample)])
+                G1.add_edges_from([tuple(e) for e in edges_sample.cpu().tolist()])
+                connected_components = len(list(nx.connected_components(G1)))
+                beta_gt = np.array([connected_components, len(G1.edges) + connected_components - len(G1.nodes)])
+
+                G2 = nx.Graph()
+                G2.add_nodes_from([i for i, n in enumerate(pred_nodes_sample)])
+                G2.add_edges_from([tuple(e) for e in pred_edges_sample])
+                connected_components = len(list(nx.connected_components(G2)))
+                beta_pred = np.array([connected_components, len(G2.edges) + connected_components - len(G2.nodes)])
+                beta_errors.append(2 * np.abs(beta_pred - beta_gt) / (beta_gt + beta_pred + 1e-10))
+
             # Add elements of current batch elem to edge map evaluator
             pred_edges_box = []
             for edges_, nodes_ in zip(pred_edges, pred_nodes):
@@ -159,7 +177,7 @@ def test(args):
             for node_, edge_, pred_node_, pred_edge_ in zip(nodes, edges, pred_nodes, pred_edges):
                 topo_results.append(compute_topo(node_.cpu(), edge_.cpu(), pred_node_, pred_edge_))
 
-            """if i > 2:
+            """if i >= 0:
                 break"""
 
     topo_array=np.array(topo_results)
@@ -179,8 +197,30 @@ def test(args):
     print("Edge scores")
     print(json.dumps(edge_metric_scores, sort_keys=True, indent=4))
 
+    b0, b1 = np.mean(beta_errors, axis=0)
+    b0_std, b1_std = np.std(beta_errors, axis=0)
+
+    print("Betti-error:", b0, b1)
+    print("Betti-error std:", b0_std, b1_std)
+
+    csv_value_string = f'{topo_array.mean(0)[0]};{topo_array.std(0)[0]};{topo_array.mean(0)[1]};{topo_array.std(0)[1]}'
+    csv_header_string = f'topo-prec;topo-pred-(std);topo-rec;topo-rec-(std)'
+
+    csv_value_string += f';{b0};{b0_std};{b1};{b1_std}'
+    csv_header_string += f';b0;b0-(std);b1;b1-(std)'
+
+    for field in node_metric_scores:
+        csv_header_string += f';node_{field};node_{field}-(std)'
+        csv_value_string += f';{node_metric_scores[field][0]};{node_metric_scores[field][1]}'
+
+    for field in edge_metric_scores:
+        csv_header_string += f';edge_{field};edge_{field}-(std)'
+        csv_value_string += f';{edge_metric_scores[field][0]};{edge_metric_scores[field][1]}'
+
+    print(csv_header_string)
+    print(csv_value_string)
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
     test(args)
-
