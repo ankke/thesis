@@ -62,20 +62,15 @@ class Vessel2GraphDataLoader(Dataset):
             [type]: [description]
         """
         data = self.data[idx]
+        vtk_data = pyvista.read(data['vtp'])
         raw_data = Image.open(data['img'])
-        seg_data = torch.tensor(np.array(raw_data))
+
+        seg_data = torch.tensor(np.array(raw_data)).unsqueeze(0) / 255.
+
         image_data = raw_data.convert('RGB')
         image_data = torch.tensor(
             np.array(image_data), dtype=torch.float).permute(2, 0, 1)
         image_data = image_data/255.0
-        vtk_data = pyvista.read(data['vtp'])
-
-        image_data = tvf.normalize(image_data.clone().detach(), mean=self.mean, std=self.std)
-
-        # correction of shift in the data
-        # shift = [np.shape(image_data)[0]/2 -1.8, np.shape(image_data)[1]/2 + 8.3, 4.0]
-        # coordinates = np.float32(np.asarray(vtk_data.points))
-        # lines = np.asarray(vtk_data.lines.reshape(-1, 3))
 
         coordinates = torch.tensor(np.float32(
             np.asarray(vtk_data.points)), dtype=torch.float)
@@ -89,11 +84,21 @@ class Vessel2GraphDataLoader(Dataset):
             lines = lines[lines[:, 0] < self.max_nodes]
             lines = lines[lines[:, 1] < self.max_nodes]
 
+        print("new sample")
+        print("image data")
+        print(image_data.shape)
+        print(torch.min(image_data))
+        print(torch.max(image_data))
+        print("seg data")
+        print(seg_data.shape)
+        print(torch.min(seg_data))
+        print(torch.max(seg_data))
 
-        return image_data, seg_data, coordinates[:self.max_nodes, :2], lines
+
+        return image_data-0.5, seg_data-0.5, coordinates[:self.max_nodes, :2], lines
 
 
-def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_samples=0):
+def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False):
     """[summary]
 
     Args:
