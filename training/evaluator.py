@@ -127,15 +127,6 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
     val_handlers = [
         #early_stop_handler,
         StatsHandler(output_transform=lambda x: None),
-        CheckpointSaver(
-            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
-                                  './models'),
-            save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
-            save_key_metric=True,
-            key_metric_n_saved=1,
-            save_interval=1,
-            key_metric_negative_sign=True
-        ),
         TensorBoardStatsHandler(
             writer,
             tag_name="val_total_loss",

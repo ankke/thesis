@@ -6,6 +6,7 @@ import torch
 import pyvista
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as tvf
+from PIL import Image
 
 # train_transform = Compose(
 #     [
@@ -30,7 +31,7 @@ class Sat2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, transform):
+    def __init__(self, data, transform, use_grayscale=False):
         """[summary]
 
         Args:
@@ -42,6 +43,8 @@ class Sat2GraphDataLoader(Dataset):
 
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
+
+        self.use_grayscale = use_grayscale
 
     def __len__(self):
         """[summary]
@@ -61,31 +64,45 @@ class Sat2GraphDataLoader(Dataset):
             [type]: [description]
         """
         data = self.data[idx]
-        image_data = imageio.imread(data['img'])
-        image_data = torch.tensor(
-            image_data, dtype=torch.float).permute(2, 0, 1)
-        image_data = image_data/255.0
         vtk_data = pyvista.read(data['vtp'])
-        seg_data = imageio.imread(data['seg'])
-        seg_data = seg_data/np.max(seg_data)
+        raw_seg_data = Image.open(data['seg'])
+
+        seg_data = np.array(raw_seg_data)
+        seg_data = np.array(seg_data)/np.max(seg_data)
         seg_data = torch.tensor(seg_data, dtype=torch.int).unsqueeze(0)
 
-        image_data = tvf.normalize(image_data.clone().detach(), mean=self.mean, std=self.std)
-
-        # correction of shift in the data
-        # shift = [np.shape(image_data)[0]/2 -1.8, np.shape(image_data)[1]/2 + 8.3, 4.0]
-        # coordinates = np.float32(np.asarray(vtk_data.points))
-        # lines = np.asarray(vtk_data.lines.reshape(-1, 3))
+        if self.use_grayscale:
+            image_data = np.array(raw_seg_data.convert('RGB'))
+            image_data = torch.tensor(
+                image_data, dtype=torch.float).permute(2, 0, 1)
+            image_data = image_data / 255.0
+            image_data -= 0.5
+        else:
+            image_data = np.array(Image.open(data['img']))
+            image_data = torch.tensor(
+                image_data, dtype=torch.float).permute(2, 0, 1)
+            image_data = image_data / 255.0
+            image_data = tvf.normalize(image_data.clone().detach(), mean=self.mean, std=self.std)
 
         coordinates = torch.tensor(np.float32(
             np.asarray(vtk_data.points)), dtype=torch.float)
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
 
+        print("new sample")
+        print("image data")
+        print(image_data.shape)
+        print(torch.min(image_data))
+        print(torch.max(image_data))
+        print("seg data")
+        print(seg_data.shape)
+        print(torch.min(seg_data))
+        print(torch.max(seg_data))
+
         return image_data, seg_data-0.5, coordinates[:, :2], lines[:, 1:]
 
 
-def build_road_network_data(config, mode='train', split=0.95, max_samples=0):
+def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False):
     """[summary]
 
     Args:
@@ -116,6 +133,7 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0):
         ds = Sat2GraphDataLoader(
             data=data_dicts,
             transform=train_transform,
+            use_grayscale=use_grayscale
         )
         return ds
     elif mode == 'test':
@@ -141,6 +159,7 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0):
         ds = Sat2GraphDataLoader(
             data=data_dicts,
             transform=val_transform,
+            use_grayscale=use_grayscale
         )
         return ds
     elif mode == 'split':
@@ -173,9 +192,11 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0):
         train_ds = Sat2GraphDataLoader(
             data=train_files,
             transform=train_transform,
+            use_grayscale=use_grayscale
         )
         val_ds = Sat2GraphDataLoader(
             data=val_files,
             transform=val_transform,
+            use_grayscale=use_grayscale
         )
         return train_ds, val_ds

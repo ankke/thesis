@@ -35,6 +35,8 @@ parser.add_argument('--recover_optim', default=False, action="store_true",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
 parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
 parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
+parser.add_argument('--pretrain_seg', default=False, action="store_true",
+                    help="Whether to pretrain on segs instead of raw images")
 
 
 class obj:
@@ -98,7 +100,7 @@ def main(args):
         build_dataset_function = build_synthetic_vessel_network_data
 
     train_ds, val_ds = build_dataset_function(
-        config, mode='split', max_samples=args.max_samples
+        config, mode='split', max_samples=args.max_samples, use_grayscale=args.pretrain_seg
     )
 
     train_loader = DataLoader(train_ds,
