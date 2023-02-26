@@ -31,7 +31,7 @@ parser.add_argument('--device', default='cuda',
                     help='device to use for training')
 parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
                     help='list of index where skip conn will be made')
-parser.add_argument('--no_recover_optim', default=True, action="store_false",
+parser.add_argument('--recover_optim', default=False, action="store_true",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
 parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
 parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
@@ -145,7 +145,7 @@ def main(args):
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
         net.load_state_dict(checkpoint['net'])
-        if config.TRAIN.RECOVER_OPTIMIZER_STATE:
+        if args.recover_optim:
             optimizer.load_state_dict(checkpoint['optimizer'])
         if args.restore_state:
             scheduler.load_state_dict(checkpoint['scheduler'])
