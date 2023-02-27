@@ -84,16 +84,6 @@ class Vessel2GraphDataLoader(Dataset):
             lines = lines[lines[:, 0] < self.max_nodes]
             lines = lines[lines[:, 1] < self.max_nodes]
 
-        print("new sample")
-        print("image data")
-        print(image_data.shape)
-        print(torch.min(image_data))
-        print(torch.max(image_data))
-        print("seg data")
-        print(seg_data.shape)
-        print(torch.min(seg_data))
-        print(torch.max(seg_data))
-
 
         return image_data-0.5, seg_data-0.5, coordinates[:self.max_nodes, :2], lines
 
