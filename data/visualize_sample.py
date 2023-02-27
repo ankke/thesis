@@ -6,28 +6,13 @@ from torchvision.transforms import Compose, Normalize
 
 
 def draw_graph(nodes, edges, ax):
-    # Create Graph for plotting graphs for actual data and prediction
-    cur_graph = nx.Graph()
-
-    # Add all nodes
-    for ind, pos in enumerate(nodes):
-        # The positions have to be altered so that the graph has the right orientation
-        # (all coordinates are normalized to [0,1])
-        cur_graph.add_node(ind, pos=(pos[1].item(), 1 - pos[0].item()))
-
-    # Add positions to nodes
-    pos = nx.get_node_attributes(cur_graph,'pos')
+    xs = nodes[:, 0]
+    ys = nodes[:, 1]
+    ax.scatter(ys, xs, c="red")
 
     # Add all edges
     for edge in edges:
-        cur_graph.add_edge(edge[0].item(), edge[1].item())
-
-    # Draw Graphs with matplotlib
-    nx.draw_networkx(cur_graph, pos, ax, node_size=20, with_labels=False)
-    ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True, grid_color='r')
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-
+        ax.plot([ys[edge[0]], ys[edge[1]]], [xs[edge[0]], xs[edge[1]]], color="red")
 
 def create_sample_visual(samples, number_samples=10):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
