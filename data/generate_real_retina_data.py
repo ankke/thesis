@@ -77,8 +77,8 @@ def patch_extract(save_path, image, seg,  mesh, device=None):
     p_w = p_w - 2*pad_w
 
     h, w = image.shape
-    x_ = np.int32(np.linspace(5, h-5-p_h, 8))
-    y_ = np.int32(np.linspace(5, w-5-p_w, 8))
+    x_ = np.int32(np.linspace(5, h-5-p_h, 6))
+    y_ = np.int32(np.linspace(5, w-5-p_w, 6))
 
     ind = np.meshgrid(x_, y_, indexing='ij')
     # Center Crop based on foreground
@@ -149,11 +149,6 @@ def create_graph(node_path, edge_path):
     return G
 
 parser = ArgumentParser()
-parser.add_argument('--config',
-                    default=None,
-                    required=True,
-                    help='config file (.yml) containing the hyper-parameters for data. '
-                         'Should be the same as for training/testing. See /config for examples.')
 parser.add_argument('--source',
                     default=None,
                     required=True,
@@ -167,10 +162,6 @@ parser.add_argument('--split',
                     type=float,
                     help='Train/Test split. 0.8 means 80% of the data will be training data and 20% testing data'
                         'Default: 0.8')
-parser.add_argument('--city_names',
-                    default=None,
-                    required=False,
-                    help='Path to json with city names that are prefixing the raw source images')
 parser.add_argument('--seed',
                     default=0,
                     type=int,
