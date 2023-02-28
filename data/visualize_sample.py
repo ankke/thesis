@@ -6,13 +6,17 @@ from torchvision.transforms import Compose, Normalize
 
 
 def draw_graph(nodes, edges, ax):
-    xs = nodes[:, 0]
-    ys = nodes[:, 1]
-    ax.scatter(ys, xs, c="red")
+    ax.set_xlim(0,128)
+    ax.set_ylim(0, 128)
+
+    xs = nodes[:, 0] * 128.
+    ys = nodes[:, 1] * 128.
+    xs = 128. - xs
+    ax.scatter(ys, xs)
 
     # Add all edges
     for edge in edges:
-        ax.plot([ys[edge[0]], ys[edge[1]]], [xs[edge[0]], xs[edge[1]]], color="red")
+        ax.plot([ys[edge[0]], ys[edge[1]]], [xs[edge[0]], xs[edge[1]]], color="black")
 
 def create_sample_visual(samples, number_samples=10):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
@@ -24,7 +28,7 @@ def create_sample_visual(samples, number_samples=10):
         plt.sca(axs[i, 1])
         draw_graph(samples["nodes"][i].clone().cpu().detach(), samples["edges"][i].clone().cpu().detach(), axs[i, 1])
         plt.sca(axs[i, 2])
-        draw_graph(samples["pred_nodes"][i], samples["pred_edges"][i], axs[i, 2])
+        draw_graph(samples["pred_nodes"][i].clone().cpu().detach(), samples["pred_edges"][i], axs[i, 2])
 
     fig.canvas.draw()
     data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)

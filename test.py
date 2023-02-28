@@ -5,6 +5,8 @@ from argparse import ArgumentParser
 import pdb
 import numpy as np
 import networkx as nx
+from data.dataset_real_eye_vessels import build_real_vessel_network_data
+
 parser = ArgumentParser()
 parser.add_argument('--config',
                     default=None,
@@ -82,6 +84,8 @@ def test(args):
         build_dataset_function = build_road_network_data
     elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
         build_dataset_function = build_synthetic_vessel_network_data
+    elif config.DATA.DATASET == 'real_eye_vessel_dataset':
+        build_dataset_function = build_real_vessel_network_data
 
     test_ds = build_dataset_function(
         config, mode='test', max_samples=args.max_samples

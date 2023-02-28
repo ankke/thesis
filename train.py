@@ -8,6 +8,7 @@ import torch
 from monai.data import DataLoader
 from data.dataset_road_network import build_road_network_data
 from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
+from data.dataset_real_eye_vessels import build_real_vessel_network_data
 from training.evaluator import build_evaluator
 from training.trainer import build_trainer
 from models import build_model
@@ -98,6 +99,8 @@ def main(args):
         build_dataset_function = build_road_network_data
     elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
         build_dataset_function = build_synthetic_vessel_network_data
+    elif config.DATA.DATASET == 'real_eye_vessel_dataset':
+        build_dataset_function = build_real_vessel_network_data
 
     train_ds, val_ds = build_dataset_function(
         config, mode='split', max_samples=args.max_samples, use_grayscale=args.pretrain_seg
