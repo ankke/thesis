@@ -19,6 +19,8 @@ parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=[0,1],
                         help='list of index where skip conn will be made.')
 parser.add_argument('--save_path', default=None, help='checkpoint of the model to test.')
 parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
+parser.add_argument('--pretrain_seg', default=False, action="store_true",
+                    help="Whether to pretrain on segs instead of raw images")
 
 
 class obj:
@@ -88,7 +90,7 @@ def test(args):
         build_dataset_function = build_real_vessel_network_data
 
     test_ds = build_dataset_function(
-        config, mode='test', max_samples=args.max_samples
+        config, mode='test', max_samples=args.max_samples, use_grayscale=args.pretrain_seg
     )
 
     test_loader = DataLoader(test_ds,

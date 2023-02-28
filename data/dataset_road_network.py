@@ -89,16 +89,6 @@ class Sat2GraphDataLoader(Dataset):
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
 
-        print("new sample")
-        print("image data")
-        print(image_data.shape)
-        print(torch.min(image_data))
-        print(torch.max(image_data))
-        print("seg data")
-        print(seg_data.shape)
-        print(torch.min(seg_data))
-        print(torch.max(seg_data))
-
         return image_data, seg_data-0.5, coordinates[:, :2], lines[:, 1:]
 
 

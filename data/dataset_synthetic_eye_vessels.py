@@ -84,7 +84,6 @@ class Vessel2GraphDataLoader(Dataset):
             lines = lines[lines[:, 0] < self.max_nodes]
             lines = lines[lines[:, 1] < self.max_nodes]
 
-
         return image_data-0.5, seg_data-0.5, coordinates[:self.max_nodes, :2], lines
 
 

@@ -6,6 +6,7 @@ import pyvista
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision.transforms.functional as tvf
+import pandas as pd
 
 # train_transform = Compose(
 #     [
@@ -62,7 +63,8 @@ class Vessel2GraphDataLoader(Dataset):
             [type]: [description]
         """
         data = self.data[idx]
-        vtk_data = pyvista.read(data['vtp'])
+        nodes = pd.read_csv(data['nodes'], sep=";", index_col="id")
+        edges = pd.read_csv(data['edges'], sep=";", index_col="id")
         image_data = Image.open(data['img'])
         seg_data = Image.open(data['seg'])
 
@@ -75,20 +77,10 @@ class Vessel2GraphDataLoader(Dataset):
             np.array(seg_data), dtype=torch.float).unsqueeze(0)
         seg_data = seg_data / 255.0
 
-        coordinates = torch.tensor(np.float32(
-            np.asarray(vtk_data.points)), dtype=torch.float)
-        lines = torch.tensor(np.asarray(
-            vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
+        nodes = torch.tensor(nodes.to_numpy()[:, :2].astype(np.float32) / 128.)
+        edges = torch.tensor(edges.to_numpy()[:, :2].astype(int))
 
-        lines = lines[:, 1:]
-
-        if coordinates[:, :2].shape[0] > self.max_nodes:
-            print("Warning: Too many nodes in sample. Nodes will be deleted")
-            lines = lines[lines[:, 0] < self.max_nodes]
-            lines = lines[lines[:, 1] < self.max_nodes]
-
-
-        return image_data-0.5, seg_data-0.5, coordinates[:self.max_nodes, :2], lines
+        return image_data-0.5, seg_data-0.5, nodes, edges
 
 
 def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False):
@@ -105,20 +97,23 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
     if mode == 'train':
         img_folder = os.path.join(config.DATA.DATA_PATH, 'raw')
         seg_folder = os.path.join(config.DATA.DATA_PATH, 'seg')
-        vtk_folder = os.path.join(config.DATA.DATA_PATH, 'vtp')
+        graphs_folder = os.path.join(config.DATA.DATA_PATH, 'graphs')
+
         img_files = []
         seg_files = []
-        vtk_files = []
+        node_files = []
+        edge_files = []
 
         for file_ in os.listdir(img_folder):
             file_ = file_[:-8]
             img_files.append(os.path.join(img_folder, file_ + 'data.png'))
             seg_files.append(os.path.join(seg_folder, file_ + 'seg.png'))
-            vtk_files.append(os.path.join(vtk_folder, file_ + 'graph.vtp'))
+            node_files.append(os.path.join(graphs_folder, file_ + 'seg_nodes.csv'))
+            edge_files.append(os.path.join(graphs_folder, file_ + 'seg_edges.csv'))
 
         data_dicts = [
-            {"img": img_file, "seg": seg_file, "vtp": vtk_file} for img_file, seg_file, vtk_file in
-            zip(img_files, seg_files, vtk_files)
+            {"img": img_file, "seg": seg_file, "nodes": node_file, "edges": edge_file} for
+            img_file, seg_file, node_file, edge_file in zip(img_files, seg_files, node_files, edge_files)
         ]
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
@@ -129,20 +124,23 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
     elif mode == 'test':
         img_folder = os.path.join(config.DATA.TEST_DATA_PATH, 'raw')
         seg_folder = os.path.join(config.DATA.TEST_DATA_PATH, 'seg')
-        vtk_folder = os.path.join(config.DATA.TEST_DATA_PATH, 'vtp')
+        graphs_folder = os.path.join(config.DATA.TEST_DATA_PATH, 'graphs')
+
         img_files = []
         seg_files = []
-        vtk_files = []
+        node_files = []
+        edge_files = []
 
         for file_ in os.listdir(img_folder):
             file_ = file_[:-8]
-            img_files.append(os.path.join(img_folder, file_+'data.png'))
-            seg_files.append(os.path.join(seg_folder, file_+'seg.png'))
-            vtk_files.append(os.path.join(vtk_folder, file_+'graph.vtp'))
+            img_files.append(os.path.join(img_folder, file_ + 'data.png'))
+            seg_files.append(os.path.join(seg_folder, file_ + 'seg.png'))
+            node_files.append(os.path.join(graphs_folder, file_ + 'seg_nodes.csv'))
+            edge_files.append(os.path.join(graphs_folder, file_ + 'seg_edges.csv'))
 
         data_dicts = [
-            {"img": img_file, "seg": seg_file, "vtp": vtk_file} for img_file, seg_file, vtk_file in
-            zip(img_files, seg_files, vtk_files)
+            {"img": img_file, "seg": seg_file, "nodes": node_file, "edges": edge_file} for
+            img_file, seg_file, node_file, edge_file in zip(img_files, seg_files, node_files, edge_files)
         ]
 
         if max_samples > 0:
@@ -157,19 +155,23 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
     elif mode == 'split':
         img_folder = os.path.join(config.DATA.DATA_PATH, 'raw')
         seg_folder = os.path.join(config.DATA.DATA_PATH, 'seg')
-        vtk_folder = os.path.join(config.DATA.DATA_PATH, 'vtp')
+        graphs_folder = os.path.join(config.DATA.DATA_PATH, 'graphs')
+
         img_files = []
         seg_files = []
-        vtk_files = []
+        node_files = []
+        edge_files = []
 
         for file_ in os.listdir(img_folder):
             file_ = file_[:-8]
             img_files.append(os.path.join(img_folder, file_+'data.png'))
             seg_files.append(os.path.join(seg_folder, file_ + 'seg.png'))
-            vtk_files.append(os.path.join(vtk_folder, file_+'graph.vtp'))
+            node_files.append(os.path.join(graphs_folder, file_+'seg_nodes.csv'))
+            edge_files.append(os.path.join(graphs_folder, file_ + 'seg_edges.csv'))
 
         data_dicts = [
-            {"img": img_file, "seg": seg_file, "vtp": vtk_file} for img_file, seg_file, vtk_file in zip(img_files, seg_files, vtk_files)
+            {"img": img_file, "seg": seg_file, "nodes": node_file, "edges": edge_file} for
+            img_file, seg_file, node_file, edge_file in zip(img_files, seg_files, node_files, edge_files)
         ]
         random.seed(config.DATA.SEED)
         random.shuffle(data_dicts)
