@@ -213,8 +213,8 @@ def test(args):
     csv_value_string = f'{smd_mean};{smd_std}'
     csv_header_string = f'smd;smd-(std)'
 
-    csv_value_string = f';{topo_array.mean(0)[0]};{topo_array.std(0)[0]};{topo_array.mean(0)[1]};{topo_array.std(0)[1]}'
-    csv_header_string = f';topo-prec;topo-pred-(std);topo-rec;topo-rec-(std)'
+    csv_value_string += f';{topo_array.mean(0)[0]};{topo_array.std(0)[0]};{topo_array.mean(0)[1]};{topo_array.std(0)[1]}'
+    csv_header_string += f';topo-prec;topo-pred-(std);topo-rec;topo-rec-(std)'
 
     csv_value_string += f';{b0};{b0_std};{b1};{b1_std}'
     csv_header_string += f';b0;b0-(std);b1;b1-(std)'
