@@ -7,6 +7,8 @@ from torch.utils.data import Dataset
 from PIL import Image
 import torchvision.transforms.functional as tvf
 import pandas as pd
+from utils.utils import rotate_coordinates
+from torchvision.transforms.functional import rotate
 
 # train_transform = Compose(
 #     [
@@ -31,15 +33,15 @@ class Vessel2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, transform, max_nodes):
+    def __init__(self, data, augment, max_nodes):
         """[summary]
 
         Args:
             data ([type]): [description]
-            transform ([type]): [description]
+            augment ([type]): [description]
         """
         self.data = data
-        self.transform = transform
+        self.augment = augment
         self.max_nodes = max_nodes
 
         self.mean = [0.485, 0.456, 0.406]
@@ -80,6 +82,12 @@ class Vessel2GraphDataLoader(Dataset):
         nodes = torch.tensor(nodes.to_numpy()[:, :2].astype(np.float32) / 128.)
         edges = torch.tensor(edges.to_numpy()[:, :2].astype(int))
 
+        if self.augment:
+            angle = random.randint(0, 3) * 90
+            image_data = rotate(image_data, angle)
+            seg_data = rotate(seg_data, angle)
+            nodes = rotate_coordinates(nodes, angle)
+
         return image_data-0.5, seg_data-0.5, nodes, edges
 
 
@@ -117,7 +125,7 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
         ]
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
-            transform=train_transform,
+            augment=True,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
@@ -148,7 +156,7 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
 
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
-            transform=val_transform,
+            augment=False,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
@@ -185,12 +193,12 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
 
         train_ds = Vessel2GraphDataLoader(
             data=train_files,
-            transform=train_transform,
+            augment=True,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         val_ds = Vessel2GraphDataLoader(
             data=val_files,
-            transform=val_transform,
+            augment=False,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return train_ds, val_ds

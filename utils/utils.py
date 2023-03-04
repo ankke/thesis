@@ -2,7 +2,20 @@ import torch
 import numpy as np
 import pyvista
 import json
+from math import radians, sin, cos
 
+
+def rotate_coordinates(points, angle):
+    rad = radians(-angle)
+
+    rotation_matrix = torch.Tensor([
+        [cos(rad), -sin(rad)],
+        [sin(rad), cos(rad)],
+    ])
+
+    points = torch.matmul(points - 0.5, rotation_matrix) + 0.5
+
+    return points
 
 def get_total_grad_norm(parameters, norm_type=2):
     parameters = list(filter(lambda p: p.grad is not None, parameters))
