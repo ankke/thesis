@@ -100,7 +100,7 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED),
                                   './models'),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
-            save_interval=10,
+            save_interval=5,
             n_saved=5
         ),
         TensorBoardStatsHandler(
