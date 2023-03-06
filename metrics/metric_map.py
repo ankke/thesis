@@ -661,7 +661,8 @@ class Metric:
         else:
             recs = np.zeros(rec.shape[0])
             for i, single_rec in enumerate(rec):
-                recs[i] = np.mean(single_rec[single_rec > -1])
+                if len(single_rec[single_rec > -1]) > 0:
+                    recs[i] = np.mean(single_rec[single_rec > -1])
             rec = np.mean(recs)
             std = np.std(recs)
         return rec, std
