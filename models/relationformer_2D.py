@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import math
 import copy
 
+from models.domain_adaptation.domain_classifier import Discriminator
+
 from .deformable_detr_backbone import build_backbone
 from .deformable_detr_2D import build_deforamble_transformer
 from .utils import nested_tensor_from_tensor_list, NestedTensor, inverse_sigmoid
@@ -74,10 +76,13 @@ class RelationFormer(nn.Module):
         if not config.TRAIN.TRAIN_ENCODER:
             self.input_proj.requires_grad_(False)
 
+
+        self.domain_discriminator = Discriminator(in_channels=config.MODEL.ENCODER.HIDDEN_DIM)
+
         self.decoder.decoder.bbox_embed = None
 
 
-    def forward(self, samples, seg=True):
+    def forward(self, samples, seg=True, alpha=1):
         if not seg and not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
         elif seg:
@@ -114,6 +119,8 @@ class RelationFormer(nn.Module):
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight
+
+        domain_classifications = self.domain_discriminator(srcs, alpha)
     
         hs, init_reference, inter_references, _, _ = self.decoder(
             srcs, masks, query_embeds, pos
@@ -125,7 +132,7 @@ class RelationFormer(nn.Module):
         coord_loc = self.bbox_embed(object_token).sigmoid()
         
         out = {'pred_logits': class_prob, 'pred_nodes': coord_loc}
-        return hs, out, srcs
+        return hs, out, srcs, domain_classifications
 
 
 class MLP(nn.Module):

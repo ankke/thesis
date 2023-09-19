@@ -1,0 +1,7 @@
+{
+    "terminal.integrated.env.linux": {},
+    "terminal.integrated.automationProfile.linux": [
+        "-c",
+        "/path/to/activate_envs.sh; bash"
+    ]
+}

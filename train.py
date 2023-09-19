@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from monai.handlers import EarlyStopHandler
 import torch
 from monai.data import DataLoader
+from data.dataset_mixed import build_mixed_data
 from data.dataset_road_network import build_road_network_data
 from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
 from data.dataset_real_eye_vessels import build_real_vessel_network_data
@@ -91,7 +92,8 @@ def main(args):
         matcher,
         net,
         num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
-        edge_upsampling=config.TRAIN.EDGE_UPSAMPLING
+        edge_upsampling=config.TRAIN.EDGE_UPSAMPLING,
+        domain_class_weight=torch.tensor([0.1, 0.9], device=device)
     )
     val_loss = SetCriterion(config, matcher, net, num_edge_samples=9999, edge_upsampling=False)
 
@@ -101,6 +103,8 @@ def main(args):
         build_dataset_function = build_synthetic_vessel_network_data
     elif config.DATA.DATASET == 'real_eye_vessel_dataset':
         build_dataset_function = build_real_vessel_network_data
+    elif config.DATA.DATASET == 'mixed_road_dataset':
+        build_dataset_function = build_mixed_data
 
     train_ds, val_ds = build_dataset_function(
         config, mode='split', max_samples=args.max_samples, use_grayscale=args.pretrain_seg

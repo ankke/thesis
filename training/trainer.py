@@ -5,13 +5,14 @@ from monai.handlers import LrScheduleHandler, ValidationHandler, StatsHandler, T
     CheckpointSaver
 import torch
 import gc
+import numpy as np
 
 
 # define customized trainer
 class RelationformerTrainer(SupervisedTrainer):
 
     def _iteration(self, engine, batchdata):
-        images, seg, nodes, edges = batchdata[0], batchdata[1], batchdata[2], batchdata[3]
+        images, seg, nodes, edges, domains = batchdata[0], batchdata[1], batchdata[2], batchdata[3], batchdata[4]
         # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
         # inputs = torch.cat(inputs, 1)
 
@@ -19,13 +20,18 @@ class RelationformerTrainer(SupervisedTrainer):
         seg = seg.to(engine.state.device,  non_blocking=False)
         nodes = [node.to(engine.state.device,  non_blocking=False) for node in nodes]
         edges = [edge.to(engine.state.device,  non_blocking=False) for edge in edges]
-        target = {'nodes': nodes, 'edges': edges}
+        domains = domains.to(engine.state.device, non_blocking=False)
+        target = {'nodes': nodes, 'edges': edges, 'domains': domains}
 
         self.network[0].train()
         self.network[1].eval()
         self.optimizer.zero_grad()
-        
-        h, out, srcs = self.network[0](images, seg=False)
+
+        epoch = engine.state.epoch
+        iteration = engine.state.iteration
+        p = float(iteration + epoch * engine.state.epoch_length) / engine.state.max_epochs / engine.state.epoch_length
+        alpha = 2. / (1. + np.exp(-10 * p)) - 1
+        h, out, srcs, pred_domains = self.network[0](images, seg=False, alpha=alpha)
 
         # _, _, seg_srcs = self.network[1](seg, seg=True)
         
@@ -35,7 +41,7 @@ class RelationformerTrainer(SupervisedTrainer):
 
         # # pred_nodes, pred_edges = relation_infer(h, out, self.network.relation_embed)
 
-        losses = self.loss_function(h, out, target)
+        losses = self.loss_function(h, out, target, pred_domains)
         
         # loss_feat = 0
         # for i in range(len(seg_srcs)):
@@ -145,6 +151,14 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         ),
         TensorBoardStatsHandler(
             writer,
+            tag_name="domain_loss",
+            output_transform=lambda x: x["loss"]["domain"],
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+            epoch_log=True,
+            epoch_interval=1
+        ),
+        TensorBoardStatsHandler(
+            writer,
             tag_name="total_loss",
             output_transform=lambda x: x["loss"]["total"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
@@ -158,6 +172,8 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
     #     to_onehot=True,
     #     n_classes=N_CLASS)]
     # )
+
+    loss.to(device)
 
     trainer = RelationformerTrainer(
         device=device,

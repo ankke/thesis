@@ -75,7 +75,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         self.config = kwargs.pop('config')
         
     def _iteration(self, engine, batchdata):
-        images, nodes, edges = batchdata[0], batchdata[2], batchdata[3]
+        images, nodes, edges, domains = batchdata[0], batchdata[2], batchdata[3], batchdata[4]
         
         # # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
         # # inputs = torch.cat(inputs, 1)
@@ -86,12 +86,13 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         self.network.eval()
         
-        h, out, srcs = self.network(images, seg=False)
+        h, out, srcs, pred_domains = self.network(images, seg=False)
 
         losses = self.loss_function(
             h.clone().detach(),
             {'pred_logits': out['pred_logits'].clone().detach(), 'pred_nodes': out["pred_nodes"].clone().detach()},
-            {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges]}
+            {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges], 'domains': domains},
+            pred_domains.clone().detach().to('cpu')
         )
 
         pred_nodes, pred_edges = relation_infer(

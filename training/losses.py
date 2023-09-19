@@ -58,7 +58,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net, num_edge_samples=80, edge_upsampling=False):
+    def __init__(self, config, matcher, net, num_edge_samples=80, edge_upsampling=False, domain_class_weight=None):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -77,6 +77,7 @@ class SetCriterion(nn.Module):
         self.edge_upsampling = edge_upsampling
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
+        self.domain_loss = nn.NLLLoss(domain_class_weight)
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -270,7 +271,7 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def forward(self, h, out, target):
+    def forward(self, h, out, target, pred_domains):
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -287,6 +288,7 @@ class SetCriterion(nn.Module):
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
         losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
+        losses['domain'] = self.domain_loss(pred_domains, target['domains'])
         
         losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
 
