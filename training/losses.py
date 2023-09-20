@@ -77,7 +77,10 @@ class SetCriterion(nn.Module):
         self.edge_upsampling = edge_upsampling
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
-        self.domain_loss = nn.NLLLoss(domain_class_weight)
+        if config.DATA.MIXED:
+            self.domain_loss = nn.NLLLoss(domain_class_weight)
+        else:
+            self.domain_loss = None
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -288,7 +291,10 @@ class SetCriterion(nn.Module):
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
         losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
-        losses['domain'] = self.domain_loss(pred_domains, target['domains'])
+        if self.domain_loss:
+            losses['domain'] = self.domain_loss(pred_domains, target['domains'])
+        else:
+            losses['domain'] = -1
         
         losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
 

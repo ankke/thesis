@@ -76,8 +76,8 @@ class RelationFormer(nn.Module):
         if not config.TRAIN.TRAIN_ENCODER:
             self.input_proj.requires_grad_(False)
 
-
-        self.domain_discriminator = Discriminator(in_channels=config.MODEL.ENCODER.HIDDEN_DIM)
+        if config.DATA.DATASET == "mixed_road_dataset":
+            self.domain_discriminator = Discriminator(in_channels=config.MODEL.ENCODER.HIDDEN_DIM)
 
         self.decoder.decoder.bbox_embed = None
 
@@ -119,8 +119,11 @@ class RelationFormer(nn.Module):
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight
-
-        domain_classifications = self.domain_discriminator(srcs, alpha)
+            
+        if self.config.DATA.MIXED:
+            domain_classifications = self.domain_discriminator(srcs, alpha)
+        else: 
+            domain_classifications = torch.tensor(-1)
     
         hs, init_reference, inter_references, _, _ = self.decoder(
             srcs, masks, query_embeds, pos

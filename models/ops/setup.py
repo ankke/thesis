@@ -50,7 +50,7 @@ def get_extensions():
     include_dirs = [extensions_dir]
     ext_modules = [
         extension(
-            "MultiScaleDeformableAttention",
+            "MultiScaleDeformableAttention2D",
             sources,
             include_dirs=include_dirs,
             define_macros=define_macros,
@@ -60,7 +60,7 @@ def get_extensions():
     return ext_modules
 
 setup(
-    name="MultiScaleDeformableAttention",
+    name="MultiScaleDeformableAttention2D",
     version="1.0",
     author="Weijie Su",
     url="https://github.com/fundamentalvision/Deformable-DETR",
