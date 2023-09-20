@@ -91,7 +91,7 @@ def main(args):
     elif config.DATA.DATASET == 'real_eye_vessel_dataset':
         build_dataset_function = build_real_vessel_network_data
         config.DATA.MIXED = False
-    elif config.DATA.DATASET == 'mixed_road_dataset':
+    elif config.DATA.DATASET == 'mixed_road_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset':
         build_dataset_function = build_mixed_data
         config.DATA.MIXED = True
 
@@ -132,7 +132,7 @@ def main(args):
         {
             "params":
                 [p for n, p in net.named_parameters()
-                 if not match_name_keywords(n, ["encoder.0"]) and not match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
+                 if not match_name_keywords(n, ["encoder.0"]) and not match_name_keywords(n, ['reference_points', 'sampling_offsets']) and not match_name_keywords(n, ["domain_discriminator"]) and p.requires_grad],
             "lr": float(config.TRAIN.LR),
             "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
         },
@@ -145,6 +145,11 @@ def main(args):
             "params": [p for n, p in net.named_parameters() if match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
             "lr": float(config.TRAIN.LR)*0.1,
             "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
+        },
+        {
+            "params": [p for n, p in net.named_parameters() if match_name_keywords(n, ['domain_discriminator']) and p.requires_grad],
+            "lr": float(config.TRAIN.LR) * 0.1,
+            "weight_decay": float(0.)
         }
     ]
 

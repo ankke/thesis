@@ -9,6 +9,7 @@ import torchvision.transforms.functional as tvf
 from PIL import Image
 
 from data.dataset_road_network import build_road_network_data
+from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
 
 def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_grayscale=False):
     """[summary]
@@ -22,9 +23,13 @@ def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_graysc
         [type]: [description]
     """
     config.DATA.DATA_PATH = config.DATA.SOURCE_DATA_PATH
-    source_train_data, source_val_data = build_road_network_data(config, mode, split, max_samples, use_grayscale, domain_classification=0)
+    source_train_data, source_val_data = build_road_network_data(config, mode, split, 2000, use_grayscale, domain_classification=0)
+
     config.DATA.DATA_PATH = config.DATA.TARGET_DATA_PATH
-    target_train_data, target_val_data = build_road_network_data(config, mode, split, max_samples, use_grayscale, domain_classification=1)
+    if config.DATA.DATASET == "mixed_road_dataset":
+        target_train_data, target_val_data = build_road_network_data(config, mode, split, 500, use_grayscale, domain_classification=1)
+    elif config.DATA.DATASET == "mixed_synthetic_eye_vessel_dataset":
+        target_train_data, target_val_data = build_synthetic_vessel_network_data(config, mode, split, 500, use_grayscale, domain_classification=1)
 
     train_ds = ConcatDataset([source_train_data, target_train_data])
     val_ds = ConcatDataset([source_val_data, target_val_data])

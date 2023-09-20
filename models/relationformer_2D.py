@@ -76,7 +76,7 @@ class RelationFormer(nn.Module):
         if not config.TRAIN.TRAIN_ENCODER:
             self.input_proj.requires_grad_(False)
 
-        if config.DATA.DATASET == "mixed_road_dataset":
+        if config.DATA.DATASET == "mixed_road_dataset" or config.DATA.DATASET == "mixed_synthetic_eye_vessel_dataset":
             self.domain_discriminator = Discriminator(in_channels=config.MODEL.ENCODER.HIDDEN_DIM)
 
         self.decoder.decoder.bbox_embed = None
