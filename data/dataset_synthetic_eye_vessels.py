@@ -180,4 +180,4 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )
-        return train_ds, val_ds
+        return train_ds, val_ds, None

@@ -192,4 +192,4 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
             use_grayscale=use_grayscale,
             domain_classification=domain_classification
         )
-        return train_ds, val_ds
+        return train_ds, val_ds, None

@@ -36,7 +36,6 @@ parser.add_argument('--cuda_visible_device', nargs='*', type=int, default=None,
 parser.add_argument('--recover_optim', default=False, action="store_true",
                     help="Whether to restore optimizer's state. Only necessary when resuming training.")
 parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
-parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
 parser.add_argument('--pretrain_seg', default=False, action="store_true",
                     help="Whether to pretrain on segs instead of raw images")
 
@@ -95,16 +94,17 @@ def main(args):
         build_dataset_function = build_mixed_data
         config.DATA.MIXED = True
 
-    train_ds, val_ds = build_dataset_function(
-        config, mode='split', max_samples=args.max_samples, use_grayscale=args.pretrain_seg, split=0.8
+    train_ds, val_ds, sampler = build_dataset_function(
+        config, mode='split', use_grayscale=args.pretrain_seg, max_samples=config.DATA.NUM_SOURCE_SAMPLES, split=0.8
     )
 
     train_loader = DataLoader(train_ds,
                               batch_size=config.DATA.BATCH_SIZE,
-                              shuffle=True,
+                              shuffle=not sampler,
                               num_workers=config.DATA.NUM_WORKERS,
                               collate_fn=image_graph_collate_road_network,
-                              pin_memory=True)
+                              pin_memory=True,
+                              sampler=sampler)
 
     val_loader = DataLoader(val_ds,
                             batch_size=config.DATA.BATCH_SIZE,
@@ -148,8 +148,8 @@ def main(args):
         },
         {
             "params": [p for n, p in net.named_parameters() if match_name_keywords(n, ['domain_discriminator']) and p.requires_grad],
-            "lr": float(config.TRAIN.LR) * 0.1,
-            "weight_decay": float(0.)
+            "lr": float(config.TRAIN.LR_DOMAIN),
+            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
         }
     ]
 

@@ -86,6 +86,7 @@ class SetCriterion(nn.Module):
                             'cards':config.TRAIN.W_CARD,
                             'nodes':config.TRAIN.W_NODE,
                             'edges':config.TRAIN.W_EDGE,
+                            'domain':config.TRAIN.W_DOMAIN
                             }
         
     def loss_class(self, outputs, indices):
