@@ -8,7 +8,7 @@ class Discriminator(nn.Module):
     A 2-layer MLP for domain classification based on DANN.
     """
 
-    def __init__(self, in_channels=512, in_size=2272, h=2048, out_size=1):
+    def __init__(self, in_size=43008, h=2048, out_size=1):
         """
         Arguments:
             in_size: size of the input
@@ -18,7 +18,6 @@ class Discriminator(nn.Module):
 
         super().__init__()
         self.h = h
-        self.dim_collapse = nn.Conv2d(in_channels, 8, [2,2])
         self.net = nn.Sequential(
             nn.Linear(in_size, h),
             nn.BatchNorm1d(h),
@@ -32,8 +31,7 @@ class Discriminator(nn.Module):
     def forward(self, srcs, alpha):
         """"""
         features = []
-        for feature in srcs:
-            feature = self.dim_collapse(feature.clone())
+        for feature in srcs[1:]:
             feature = torch.flatten(feature, start_dim=1)
             features.append(feature)
         conc_features = torch.concat(features, dim=1)

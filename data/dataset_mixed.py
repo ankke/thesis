@@ -41,6 +41,7 @@ def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_graysc
     print(f"weight sum B: {torch.sum(weights_B)}")
 
     sampler = WeightedRandomSampler(torch.cat([weights_A, weights_B]), num_samples=math.floor(torch.sum(weights_A) + torch.sum(weights_B)))
+    #sampler = None
 
     return train_ds, val_ds, sampler
 

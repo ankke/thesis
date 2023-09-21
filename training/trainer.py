@@ -41,6 +41,8 @@ class RelationformerTrainer(SupervisedTrainer):
 
         # # pred_nodes, pred_edges = relation_infer(h, out, self.network.relation_embed)
 
+        #print(torch.concat([torch.exp(pred_domains), domains.unsqueeze(1)], axis=1))
+
         losses = self.loss_function(h, out, target, pred_domains)
         
         # loss_feat = 0

@@ -82,9 +82,11 @@ def test(args):
 
     net = build_model(config).to(device)
 
-    if config.DATA.DATASET == 'road_dataset':
+    config.DATA.MIXED = False
+
+    if config.DATA.DATASET == 'road_dataset' or config.DATA.DATASET == 'mixed_road_dataset':
         build_dataset_function = build_road_network_data
-    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
+    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset':
         build_dataset_function = build_synthetic_vessel_network_data
     elif config.DATA.DATASET == 'real_eye_vessel_dataset':
         build_dataset_function = build_real_vessel_network_data
@@ -126,7 +128,7 @@ def test(args):
             nodes = [node.to(args.device,  non_blocking=False) for node in nodes]
             edges = [edge.to(args.device,  non_blocking=False) for edge in edges]
 
-            h, out, _ = net(images, seg=False)
+            h, out, _, _ = net(images, seg=False)
             pred_nodes, pred_edges, pred_nodes_box, pred_nodes_box_score, pred_nodes_box_class, pred_edges_box_score, pred_edges_box_class = relation_infer(
                 h.detach(), out, net, config.MODEL.DECODER.OBJ_TOKEN, config.MODEL.DECODER.RLN_TOKEN,
                 nms=False, map_=True

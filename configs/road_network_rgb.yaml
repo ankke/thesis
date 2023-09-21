@@ -5,12 +5,12 @@ DATA:
   DATA_PATH: "/home/iterm/johannes.paetzold/data/20cities/train_data"
   SOURCE_DATA_PATH: "/home/iterm/johannes.paetzold/data/20cities/train_data" # Path to dataset, could be overwritten by command line argument
   NUM_SOURCE_SAMPLES: 20000
-  NUM_TARGET_SAMPLES: 0
-  TARGET_DATA_PATH: "/home/iterm/johannes.paetzold/data/agadez/train_data"
+  NUM_TARGET_SAMPLES: 5000
+  TARGET_DATA_PATH: "/home/iterm/johannes.paetzold/data/synthetic_eye_vessels_small/train_data"
   DOMAIN_WEIGHTING: [0.5, 0.5]
   #TEST_DATA_PATH: "/home/iterm/johannes.paetzold/data/synthetic_eye_vessels_small/test_data"
-  TEST_DATA_PATH: "/home/iterm/johannes.paetzold/data/agadez/test_data"
-  DATASET: "mixed_road_dataset" # Dataset name
+  TEST_DATA_PATH: "/home/iterm/johannes.paetzold/data/synthetic_eye_vessels_small/test_data"
+  DATASET: "mixed_synthetic_eye_vessel_dataset" # Dataset name
   IMG_SIZE: [128, 128] # Input image size
   NUM_WORKERS: 4 # Number of data loading threads
   SEED: 10 # random seed for reproducibility
@@ -53,7 +53,7 @@ MODEL:
     # RLN_TOKEN: True
 
     OBJ_TOKEN: 80
-    RLN_TOKEN: 1
+    RLN_TOKEN: 5
     DUMMY_TOKEN: 0
 
     RLN_ATTN: True # only do comb RLN_ATTN True + RLN_TOKEN 0 and reverse
@@ -64,8 +64,8 @@ MODEL:
 
 TRAIN:
   EPOCHS: 40
-  LR: 2e-4
-  LR_BACKBONE: 2e-5
+  LR: 0.001
+  LR_BACKBONE: 0.001
   LR_DOMAIN: 1e-3
   TRAIN_CNN_BACKBONE: True
   TRAIN_ENCODER: True
@@ -74,8 +74,8 @@ TRAIN:
   LR_DROP: 180
   CLIP_MAX_NORM: 0.1 # hardcoded
   NUM_EDGE_SAMPLES: 100
-  EDGE_UPSAMPLING: False # Only combine True with NUM_EDGE_SAMPLES=9999
-  EDGE_SAMPLE_RATIO: 0.1
+  EDGE_UPSAMPLING: True # Only combine True with NUM_EDGE_SAMPLES=9999
+  EDGE_SAMPLE_RATIO: 0.2
   EDGE_SAMPLE_RATIO_INTERVAL: 0.025
 
   SAVE_PATH: "./trained_weights/" # save path for the checkpoint, log and val results
