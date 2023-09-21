@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import ConcatDataset, WeightedRandomSampler
 from data.dataset_road_network import build_road_network_data
 from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
+import math
 
 def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_grayscale=False):
     """[summary]
@@ -25,7 +26,7 @@ def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_graysc
 
     # Calculate the number of samples in each dataset
     num_samples_A = len(source_train_data)
-    num_samples_B = len(source_val_data)
+    num_samples_B = len(target_train_data)
 
     # Calculate the weights for each sample in each dataset
     weights_A = torch.ones(num_samples_A)
@@ -34,7 +35,12 @@ def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_graysc
     train_ds = ConcatDataset([source_train_data, target_train_data])
     val_ds = ConcatDataset([source_val_data, target_val_data])
 
-    sampler = WeightedRandomSampler(torch.cat([weights_A, weights_B]), num_samples=num_samples_A*2)
+    print(f"samples A: {num_samples_A}")
+    print(f"samples B: {num_samples_B}")
+    print(f"weight sum a: {torch.sum(weights_A)}")
+    print(f"weight sum B: {torch.sum(weights_B)}")
+
+    sampler = WeightedRandomSampler(torch.cat([weights_A, weights_B]), num_samples=math.floor(torch.sum(weights_A) + torch.sum(weights_B)))
 
     return train_ds, val_ds, sampler
 
