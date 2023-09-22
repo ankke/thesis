@@ -38,6 +38,8 @@ parser.add_argument('--recover_optim', default=False, action="store_true",
 parser.add_argument('--exp_name', dest='exp_name', help='name of the experiment', type=str,required=True)
 parser.add_argument('--pretrain_seg', default=False, action="store_true",
                     help="Whether to pretrain on segs instead of raw images")
+parser.add_argument('--finetune_da', default=False, action="store_true",
+                    help="Whether the model was pretrained with domain adversarial. If true, the checkpoint will be loaded with strict=false")
 
 
 class obj:
@@ -162,7 +164,7 @@ def main(args):
 
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
-        net.load_state_dict(checkpoint['net'])
+        net.load_state_dict(checkpoint['net'], strict=not args.finetune_da)
         if args.recover_optim:
             optimizer.load_state_dict(checkpoint['optimizer'])
         if args.restore_state:
