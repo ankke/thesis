@@ -7,6 +7,8 @@ import torch
 import gc
 import numpy as np
 
+from metrics.cka import batch_cka
+
 
 # define customized trainer
 class RelationformerTrainer(SupervisedTrainer):
@@ -69,7 +71,10 @@ class RelationformerTrainer(SupervisedTrainer):
         gc.collect()
         torch.cuda.empty_cache()
 
-        return {"images": images, "points": nodes, "edges": edges, "loss": losses}
+        features_mixed = torch.flatten(srcs[-1], 1)
+        distance = batch_cka(features_mixed[domains==0], features_mixed[domains==1])
+
+        return {"images": images, "points": nodes, "edges": edges, "loss": losses, "feature_distance": distance}
 
 
 def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer,
@@ -110,6 +115,14 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_interval=5,
             n_saved=5
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="feature_distance",
+            output_transform=lambda x: x["feature_distance"],
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+            epoch_log=True,
+            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,
