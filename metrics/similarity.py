@@ -3,8 +3,13 @@ Module implementing the CKA metric on a batch level.
 Adapted from https://colab.research.google.com/github/google-research/google-research/blob/master/representation_similarity/Demo.ipynb#scrollTo=MkucRi3yn7UJ
 """
 
-import torch
+from ignite.metrics import Metric
+from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 import numpy as np
+from ignite.exceptions import NotComputableError
+import torch
+
+from metrics.svcca import robust_cca_similarity
 
 def gram_linear(x):
   """Compute Gram (kernel) matrix for a linear kernel.
@@ -159,3 +164,38 @@ def batch_cross_product(X, Y):
     Y = np.tile(Y, (X.shape[0] // Y.shape[0], 1))
 
     return X, Y
+
+class SimilarityMetric(Metric):
+  """
+  Accumulates a similarity metric over multiple iterations."""
+
+  def __init__(self, output_transform=lambda x:x, device="cpu"):
+    self._source_samples = []
+    self._target_samples = []
+    super(SimilarityMetric, self).__init__(output_transform=output_transform, device=device)
+
+  @reinit__is_reduced
+  def reset(self):
+    self._source_samples = []
+    self._target_samples = []
+    super(SimilarityMetric, self).reset()
+
+  @reinit__is_reduced
+  def update(self, output):
+    features, domains = output
+    X = features[-1][domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
+    Y = features[-1][domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
+    self._source_samples.append(X)
+    self._target_samples.append(Y)
+
+
+  @sync_all_reduce("_num_examples", "_num_correct:SUM")
+  def compute(self):
+    if self._num_examples == 0:
+        raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
+    
+    # Concat list of np arrays across first dimension
+    X = np.concatenate(self._source_samples, axis=0)
+    Y = np.concatenate(self._target_samples, axis=0)
+
+    return batch_cka(X, Y)

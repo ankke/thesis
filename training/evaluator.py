@@ -6,6 +6,7 @@ from monai.engines import SupervisedEvaluator
 from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
 from metrics.loss_metric import MeanLoss
 from metrics.metric_smd import MeanSMD
+from metrics.similarity import SimilarityMetric
 from training.inference import relation_infer
 
 from torch.utils.data import DataLoader
@@ -82,6 +83,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         images = images.to(engine.state.device,  non_blocking=False)
         nodes = [node.to(engine.state.device,  non_blocking=False) for node in nodes]
         edges = [edge.to(engine.state.device,  non_blocking=False) for edge in edges]
+        domains = domains.to(engine.state.device, non_blocking=False)
         target = {'nodes': nodes, 'edges': edges}
 
         self.network.eval()
@@ -92,7 +94,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
             h.clone().detach(),
             {'pred_logits': out['pred_logits'].clone().detach(), 'pred_nodes': out["pred_nodes"].clone().detach()},
             {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges], 'domains': domains},
-            pred_domains.clone().detach().to('cpu')
+            pred_domains.clone()
         )
 
         pred_nodes, pred_edges = relation_infer(
@@ -111,7 +113,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        return {"images": images, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
+        return {"images": images, "srcs": srcs, "domains": domains, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
 
 
 def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config, device, early_stop_handler=None):
@@ -178,6 +180,9 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
             "val_card_loss": MeanLoss(
                 output_transform=lambda x: x["loss"]["cards"],
             ),
+            "val_svcca": SimilarityMetric(
+                output_transform=lambda x: (x["srcs"], x["domains"])
+            )
         },
         val_handlers=val_handlers,
         amp=False,

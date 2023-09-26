@@ -85,12 +85,8 @@ class RelationformerTrainer(SupervisedTrainer):
         cosine_similarity = batch_cosine(X,Y)
         euclidean_distance = batch_euclidean(X,Y)
 
-        # print all keys of ccas
-        try:
-            svcca_similarity = robust_cca_similarity(X_up,Y_up, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"]
-        except:
-            svcca_similarity = np.NaN
-
+        #svcca_similarity = robust_cca_similarity(X_up,Y_up, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"]
+        svcca_similarity = 0
         similarities = {
             "cka": cka_similarity,
             "cosine": cosine_similarity,

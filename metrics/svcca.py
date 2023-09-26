@@ -38,7 +38,7 @@ from __future__ import division
 from __future__ import print_function
 import numpy as np
 
-num_cca_trials = 5
+num_cca_trials = 1
 
 def positivedef_matrix_sqrt(array):
   """Stable method for computing matrix square roots, supports complex matrices.
@@ -157,6 +157,7 @@ def compute_ccas(sigma_xx, sigma_xy, sigma_yx, sigma_yy, epsilon,
 
   if verbose:
     print("trying to take final svd")
+  print(arr)
   u, s, v = np.linalg.svd(arr)
 
   if verbose:
