@@ -7,7 +7,8 @@ import torch
 import gc
 import numpy as np
 
-from metrics.cka import batch_cka
+from metrics.similarity import batch_cka, batch_cosine, batch_euclidean, upsample_examples
+from metrics.svcca import get_cca_similarity, robust_cca_similarity
 
 
 # define customized trainer
@@ -71,10 +72,33 @@ class RelationformerTrainer(SupervisedTrainer):
         gc.collect()
         torch.cuda.empty_cache()
 
-        features_mixed = torch.flatten(srcs[-1], 1)
-        distance = batch_cka(features_mixed[domains==0], features_mixed[domains==1])
+        # Filtering for each domain and flatten the spatial dimensions of X (batch, channel, height, widths) and Y while keeping the channels
+        X = srcs[-1][domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
+        Y = srcs[-1][domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
 
-        return {"images": images, "points": nodes, "edges": edges, "loss": losses, "feature_distance": distance}
+        X_up, Y_up = upsample_examples(srcs[-1][domains == 0].detach().cpu().numpy(),srcs[-1][domains == 1].detach().cpu().numpy())
+        # Permute and flatten the umsapled numpy arrays
+        X_up = np.moveaxis(X_up, 1,3).reshape(-1, X_up.shape[1])
+        Y_up = np.moveaxis(Y_up, 1,3).reshape(-1, Y_up.shape[1])
+
+        cka_similarity = batch_cka(X_up,Y_up)
+        cosine_similarity = batch_cosine(X,Y)
+        euclidean_distance = batch_euclidean(X,Y)
+
+        # print all keys of ccas
+        try:
+            svcca_similarity = robust_cca_similarity(X_up,Y_up, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"]
+        except:
+            svcca_similarity = np.NaN
+
+        similarities = {
+            "cka": cka_similarity,
+            "cosine": cosine_similarity,
+            "euclidean": euclidean_distance,
+            "svcca": svcca_similarity
+        }
+
+        return {"images": images, "points": nodes, "edges": edges, "loss": losses, "similarities": similarities}
 
 
 def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer,
@@ -118,8 +142,32 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         ),
         TensorBoardStatsHandler(
             writer,
-            tag_name="feature_distance",
-            output_transform=lambda x: x["feature_distance"],
+            tag_name="cka_similarity",
+            output_transform=lambda x: x["similarities"]["cka"],
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+            epoch_log=True,
+            epoch_interval=1
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="svcca_similarity",
+            output_transform=lambda x: x["similarities"]["svcca"],
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+            epoch_log=True,
+            epoch_interval=1
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="euclidean_distance",
+            output_transform=lambda x: x["similarities"]["euclidean"],
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+            epoch_log=True,
+            epoch_interval=1
+        ),
+        TensorBoardStatsHandler(
+            writer,
+            tag_name="cosine_similarity",
+            output_transform=lambda x: x["similarities"]["cosine"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
             epoch_log=True,
             epoch_interval=1

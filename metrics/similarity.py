@@ -51,8 +51,6 @@ def center_gram(gram, unbiased=False):
   Returns:
     A symmetric matrix with centered columns and rows.
   """
-  if not np.allclose(gram, gram.T):
-    raise ValueError('Input must be a symmetric matrix.')
   gram = gram.copy()
 
   if unbiased:
@@ -98,6 +96,18 @@ def cka(gram_x, gram_y, debiased=False):
     normalization_y = np.linalg.norm(gram_y)
     return scaled_hsic / (normalization_x * normalization_y)
 
+def upsample_examples(X,Y):
+    """
+    Upsamples the set (of X or Y) with less samples such that both sets contain the same number of samples"""
+    if X.shape[0] < Y.shape[0]:
+        X = np.repeat(X, Y.shape[0] // X.shape[0], axis=0)
+        Y = Y[:X.shape[0]]
+    elif X.shape[0] > Y.shape[0]:
+        Y = np.repeat(Y, X.shape[0] // Y.shape[0], axis=0)
+        X = X[:Y.shape[0]]
+
+    return X, Y
+
 
 def batch_cka(X, Y):
     """
@@ -106,14 +116,46 @@ def batch_cka(X, Y):
         X: A num_examples_source x num_features matrix of features.
         Y: A num_examples_target x num_features matrix of features.
     """
-    # Detaching from gpu and converting to numpy
-    X = X.detach().cpu().numpy()
-    Y = Y.detach().cpu().numpy()
+    gram_x = gram_rbf(X, threshold=0.5)
+    gram_y = gram_rbf(Y, threshold=0.5)
+    res = cka(gram_x, gram_y)
+    # Takes absolute value of res
+    res = np.abs(res)
+    return res
 
-    # Building pairs such that each example from X is paired with each example from Y
+def batch_cosine(X, Y):
+    """
+    Computes the cosine similarity for a complete batch of samples by averaging the pairwise distance between each example from X with each example from Y.
+    Args:
+        X: A num_examples_source x num_features matrix of features.
+        Y: A num_examples_target x num_features matrix of features.
+    """
+    X,Y = batch_cross_product(X, Y)
+
+    # Computing cosine similarity
+    res = np.sum(X * Y, axis=1) / (np.linalg.norm(X, axis=1) * np.linalg.norm(Y, axis=1))
+
+    return np.mean(np.abs(res))
+
+def batch_euclidean(X, Y):
+    """
+    Computes the euclidean distance for a complete batch of samples by averaging the pairwise distance between each example from X with each example from Y.
+    Args:
+        X: A num_examples_source x num_features matrix of features.
+        Y: A num_examples_target x num_features matrix of features.
+    """
+    X,Y = batch_cross_product(X, Y)
+
+    # Computing euclidean distance
+    res = np.linalg.norm(X - Y, axis=1)
+
+    return np.mean(np.abs(res))
+
+def batch_cross_product(X, Y):
+    """
+    Building pairs such that each example from X is paired with each example from Y
+    """
     X = np.repeat(X, Y.shape[0], axis=0)
     Y = np.tile(Y, (X.shape[0] // Y.shape[0], 1))
 
-    gram_x = gram_linear(X)
-    gram_y = gram_linear(Y)
-    return cka(gram_x, gram_y)
+    return X, Y
