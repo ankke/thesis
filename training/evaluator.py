@@ -92,12 +92,13 @@ class RelationformerEvaluator(SupervisedEvaluator):
         
         h, out, srcs, pred_domains = self.network(images, seg=False)
 
-        losses = self.loss_function(
-            h.clone().detach(),
-            {'pred_logits': out['pred_logits'].clone().detach(), 'pred_nodes': out["pred_nodes"].clone().detach()},
-            {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges], 'domains': domains},
-            pred_domains.clone()
-        )
+        with torch.no_grad():
+            losses = self.loss_function(
+                h.clone().detach(),
+                {'pred_logits': out['pred_logits'].clone().detach(), 'pred_nodes': out["pred_nodes"].clone().detach()},
+                {'nodes': [node.clone().detach() for node in nodes], 'edges': [edge.clone().detach() for edge in edges], 'domains': domains},
+                pred_domains.clone()
+            )
 
         pred_nodes, pred_edges = relation_infer(
             h.detach(), out, self.network, self.config.MODEL.DECODER.OBJ_TOKEN, self.config.MODEL.DECODER.RLN_TOKEN

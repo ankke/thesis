@@ -287,7 +287,6 @@ class SimilarityMetricPCA(Metric):
       self._source_samples = []
       self._target_samples = []
       super(SimilarityMetricPCA, self).reset()
-    print("reset")
 
   @reinit__is_reduced
   def update(self, output):

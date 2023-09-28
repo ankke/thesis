@@ -33,7 +33,7 @@ class Vessel2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, augment, max_nodes):
+    def __init__(self, data, augment, max_nodes, domain_classification=-1):
         """[summary]
 
         Args:
@@ -46,6 +46,8 @@ class Vessel2GraphDataLoader(Dataset):
 
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
+
+        self.domain_classification = domain_classification
 
     def __len__(self):
         """[summary]
@@ -88,10 +90,10 @@ class Vessel2GraphDataLoader(Dataset):
             seg_data = rotate(seg_data, angle)
             nodes = rotate_coordinates(nodes, angle)
 
-        return image_data-0.5, seg_data-0.5, nodes, edges
+        return image_data-0.5, seg_data-0.5, nodes, edges, self.domain_classification
 
 
-def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False):
+def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False, domain_classification=-1):
     """[summary]
 
     Args:
@@ -194,11 +196,13 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
         train_ds = Vessel2GraphDataLoader(
             data=train_files,
             augment=True,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
+            domain_classification=domain_classification,
         )
         val_ds = Vessel2GraphDataLoader(
             data=val_files,
             augment=False,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
+            domain_classification=domain_classification,
         )
         return train_ds, val_ds, None

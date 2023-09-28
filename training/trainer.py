@@ -83,6 +83,8 @@ class RelationformerTrainer(SupervisedTrainer):
         del nodes
         del edges
         del target
+        del X_up
+        del Y_up
         gc.collect()
         torch.cuda.empty_cache()
 
