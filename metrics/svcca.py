@@ -157,7 +157,6 @@ def compute_ccas(sigma_xx, sigma_xy, sigma_yx, sigma_yy, epsilon,
 
   if verbose:
     print("trying to take final svd")
-  print(arr)
   u, s, v = np.linalg.svd(arr)
 
   if verbose:
@@ -363,10 +362,10 @@ def robust_cca_similarity(acts1, acts2, threshold=0.98, epsilon=1e-6,
   adds some noise to the activations to help convergence.
 
   Args:
-            acts1: (num_neurons1, data_points) a 2d numpy array of neurons by
+            acts1: (data_points, num_neurons1) a 2d numpy array of neurons by
                    datapoints where entry (i,j) is the output of neuron i on
                    datapoint j.
-            acts2: (num_neurons2, data_points) same as above, but (potentially)
+            acts2: (data_points, num_neurons2) same as above, but (potentially)
                    for a different set of neurons. Note that acts1 and acts2
                    can have different numbers of neurons, but must agree on the
                    number of datapoints
@@ -392,7 +391,8 @@ def robust_cca_similarity(acts1, acts2, threshold=0.98, epsilon=1e-6,
                          compute_dirns=True, the cca directions are also
                          computed.
   """
-
+  acts1 = np.moveaxis(acts1, 0, 1)
+  acts2 = np.moveaxis(acts2, 0, 1)
   for trial in range(num_cca_trials):
     try:
       return_dict = get_cca_similarity(acts1, acts2, threshold=threshold, compute_dirns=compute_dirns, verbose=verbose)
@@ -401,5 +401,4 @@ def robust_cca_similarity(acts1, acts2, threshold=0.98, epsilon=1e-6,
       acts2 = acts2*1e-1 + np.random.normal(size=acts1.shape)*epsilon
       if trial + 1 == num_cca_trials:
         raise
-      
   return return_dict

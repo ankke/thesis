@@ -6,7 +6,8 @@ from monai.engines import SupervisedEvaluator
 from monai.handlers import StatsHandler, CheckpointSaver, TensorBoardStatsHandler, TensorBoardImageHandler
 from metrics.loss_metric import MeanLoss
 from metrics.metric_smd import MeanSMD
-from metrics.similarity import SimilarityMetric
+from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, create_feature_representation_visual
+from metrics.svcca import robust_cca_similarity
 from training.inference import relation_infer
 
 from torch.utils.data import DataLoader
@@ -76,6 +77,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
         self.config = kwargs.pop('config')
         
     def _iteration(self, engine, batchdata):
+        print("val iteration")
         images, nodes, edges, domains = batchdata[0], batchdata[2], batchdata[3], batchdata[4]
         
         # # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
@@ -113,7 +115,7 @@ class RelationformerEvaluator(SupervisedEvaluator):
 
         gc.collect()
         torch.cuda.empty_cache()
-        return {"images": images, "srcs": srcs, "domains": domains, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
+        return {"images": images, "src": srcs[-1], "domains": domains, "nodes": nodes, "edges": edges, "pred_nodes": pred_nodes, "pred_edges": pred_edges, "loss": losses}
 
 
 def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config, device, early_stop_handler=None):
@@ -127,6 +129,13 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
     Returns:
         [type]: [description]
     """
+    # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
+    base_similarity = SimilarityMetricPCA(
+        output_transform=lambda x: (x["src"], x["domains"]), 
+        similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
+        base_metric=None
+    )
+    
     val_handlers = [
         #early_stop_handler,
         StatsHandler(output_transform=lambda x: None),
@@ -140,9 +149,17 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
             writer,
             epoch_level=True,
             interval=1,
-            # max_channels=3,>
-            output_transform=lambda x: create_sample_visual(x)
-        )
+            max_channels=3,
+            output_transform=lambda x: create_feature_representation_visual(base_similarity),
+        ),
+        #TensorBoardImageHandler(
+        #    writer,
+        #    epoch_level=True,
+        #    interval=1,
+        #    max_channels=3,
+        #    output_transform=lambda _: create_sample_visual(x),
+        #    log_dir="logs1"
+        #)
     ]
 
     # val_post_transform = Compose(
@@ -180,30 +197,36 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
             "val_card_loss": MeanLoss(
                 output_transform=lambda x: x["loss"]["cards"],
             ),
-            "val_svcca": SimilarityMetric(
-                output_transform=lambda x: (x["srcs"], x["domains"])
-            )
+            "val_cca_similarity": base_similarity,
+            "val_cka_similarity": SimilarityMetricPCA(
+                output_transform=lambda x: (x["src"], x["domains"]), 
+                similarity_function=batch_cka,
+                base_metric=base_similarity
+            ),
+               
+            
         },
         val_handlers=val_handlers,
         amp=False,
         loss_function=loss
     )
 
-    """"val_node_loss": MeanLoss(
-                output_transform=lambda x: x["loss"]["nodes"],
+    """"val_cka_similarity": SimilarityMetric(
+                output_transform=lambda x: (x["srcs"], x["domains"]), 
+                similarity_function=batch_cka
             ),
-            "val_class_loss": MeanLoss(
-                output_transform=lambda x: x["loss"]["class"],
+            #"val_svcca_similarity": SimilarityMetric(
+            #    output_transform=lambda x: (x["srcs"], x["domains"]), 
+            #    similarity_function=lambda x,y: robust_cca_similarity(x, y, epsilon=1e-10, verbose=False,compute_dirns=False,threshold=0.98)
+            #),
+            "val_cosine_similarity": SimilarityMetric(
+                output_transform=lambda x: (x["srcs"], x["domains"]), 
+                similarity_function=batch_cosine
             ),
-            "val_edge_loss": MeanLoss(
-                output_transform=lambda x: x["loss"]["edges"],
-            ),
-            "val_card_loss": MeanLoss(
-                output_transform=lambda x: x["loss"]["cards"],
-            ),
-            "val_smd": MeanSMD(
-                output_transform=lambda x: x,
-            ),"""
+            "val_euclidean_distance": SimilarityMetric(
+                output_transform=lambda x: (x["srcs"], x["domains"]), 
+                similarity_function=batch_euclidean
+            )"""
 
     return evaluator
 

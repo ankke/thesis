@@ -7,7 +7,7 @@ import torch
 import gc
 import numpy as np
 
-from metrics.similarity import batch_cka, batch_cosine, batch_euclidean, upsample_examples
+from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, upsample_examples
 from metrics.svcca import get_cca_similarity, robust_cca_similarity
 
 
@@ -68,13 +68,6 @@ class RelationformerTrainer(SupervisedTrainer):
         #     _ = get_total_grad_norm(self.network[0].parameters(), 0.1)
     
         self.optimizer.step()
-        
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        # Filtering for each domain and flatten the spatial dimensions of X (batch, channel, height, widths) and Y while keeping the channels
-        X = srcs[-1][domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
-        Y = srcs[-1][domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
 
         X_up, Y_up = upsample_examples(srcs[-1][domains == 0].detach().cpu().numpy(),srcs[-1][domains == 1].detach().cpu().numpy())
         # Permute and flatten the umsapled numpy arrays
@@ -82,19 +75,18 @@ class RelationformerTrainer(SupervisedTrainer):
         Y_up = np.moveaxis(Y_up, 1,3).reshape(-1, Y_up.shape[1])
 
         cka_similarity = batch_cka(X_up,Y_up)
-        cosine_similarity = batch_cosine(X,Y)
-        euclidean_distance = batch_euclidean(X,Y)
-
-        #svcca_similarity = robust_cca_similarity(X_up,Y_up, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"]
-        svcca_similarity = 0
         similarities = {
-            "cka": cka_similarity,
-            "cosine": cosine_similarity,
-            "euclidean": euclidean_distance,
-            "svcca": svcca_similarity
+            "cka": cka_similarity
         }
+        del images
+        del seg
+        del nodes
+        del edges
+        del target
+        gc.collect()
+        torch.cuda.empty_cache()
 
-        return {"images": images, "points": nodes, "edges": edges, "loss": losses, "similarities": similarities}
+        return {"src": srcs[-1], "loss": losses, "similarities": similarities, "domains": domains}
 
 
 def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer,
@@ -138,32 +130,8 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         ),
         TensorBoardStatsHandler(
             writer,
-            tag_name="cka_similarity",
+            tag_name="iteration_cka_similarity",
             output_transform=lambda x: x["similarities"]["cka"],
-            global_epoch_transform=lambda x: scheduler.last_epoch,
-            epoch_log=True,
-            epoch_interval=1
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="svcca_similarity",
-            output_transform=lambda x: x["similarities"]["svcca"],
-            global_epoch_transform=lambda x: scheduler.last_epoch,
-            epoch_log=True,
-            epoch_interval=1
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="euclidean_distance",
-            output_transform=lambda x: x["similarities"]["euclidean"],
-            global_epoch_transform=lambda x: scheduler.last_epoch,
-            epoch_log=True,
-            epoch_interval=1
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="cosine_similarity",
-            output_transform=lambda x: x["similarities"]["cosine"],
             global_epoch_transform=lambda x: scheduler.last_epoch,
             epoch_log=True,
             epoch_interval=1
@@ -223,7 +191,7 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             global_epoch_transform=lambda x: scheduler.last_epoch,
             epoch_log=True,
             epoch_interval=1
-        )
+        ),
     ]
     # train_post_transform = Compose(
     #     [AsDiscreted(keys=("pred", "label"),
@@ -233,6 +201,13 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
     # )
 
     loss.to(device)
+
+    # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
+    base_metric = SimilarityMetricPCA(
+        output_transform=lambda x: (x["src"], x["domains"]), 
+        similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
+        base_metric=None
+    )
 
     trainer = RelationformerTrainer(
         device=device,
@@ -250,6 +225,14 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         #     )
         # },
         train_handlers=train_handlers,
+        key_train_metric={"train_cca_similarity": base_metric},
+        additional_metrics={
+            "train_cka_similarity": SimilarityMetricPCA(
+                output_transform=lambda x: (x["src"], x["domains"]), 
+                similarity_function=batch_cka,
+                base_metric=base_metric
+            ),
+        }
         # amp=fp16,
     )
 

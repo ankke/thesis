@@ -2,7 +2,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 from torchvision.transforms import Compose, Normalize
-
+from fitsne import FItSNE
 
 
 def draw_graph(nodes, edges, ax):
@@ -32,10 +32,12 @@ def create_sample_visual(samples, number_samples=10):
         draw_graph(samples["pred_nodes"][i].clone().cpu().detach(), samples["pred_edges"][i], axs[i, 2])
 
     fig.canvas.draw()
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).copy()
+    data_1 = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     plt.close(fig)
-    return np.transpose(data, (2, 0, 1))
+    res = np.expand_dims(np.expand_dims(np.transpose(data_1, (2, 0, 1)), axis=0), axis=0)
+    print("res", res.shape)
+    return  res #, np.transpose(data_2, (2, 0, 1))
 
 
 inv_norm = Compose([
