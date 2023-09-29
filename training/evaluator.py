@@ -158,7 +158,7 @@ def build_evaluator(val_loader, net, loss, optimizer, scheduler, writer, config,
         ),
     }
 
-    if not config.DATA.MIXED:
+    if config.DATA.MIXED:
         # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
         base_similarity = SimilarityMetricPCA(
             output_transform=lambda x: (x["src"], x["domains"]), 
