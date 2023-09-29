@@ -146,6 +146,7 @@ class RelationFormer(nn.Module):
             
         else: 
             backbone_domain_classifications = torch.tensor(-1)
+            conc_labels = None
     
         hs, init_reference, inter_references, _, _ = self.decoder(
             srcs, masks, query_embeds, pos

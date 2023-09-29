@@ -21,6 +21,9 @@ parser.add_argument('--save_path', default=None, help='checkpoint of the model t
 parser.add_argument("--max_samples", default=0, help='On how many samples should the net be trained?', type=int)
 parser.add_argument('--pretrain_seg', default=False, action="store_true",
                     help="Whether to pretrain on segs instead of raw images")
+parser.add_argument('--no_strict_loading', default=False, action="store_true",
+                    help="Whether the model was pretrained with domain adversarial. If true, the checkpoint will be loaded with strict=false")
+
 
 
 class obj:
@@ -80,6 +83,8 @@ def test(args):
     torch.multiprocessing.set_sharing_strategy('file_system')
     device = torch.device("cuda") if args.device=='cuda' else torch.device("cpu")
 
+    config.DATA.MIXED = False
+
     net = build_model(config).to(device)
 
     config.DATA.MIXED = False
@@ -88,7 +93,7 @@ def test(args):
         build_dataset_function = build_road_network_data
     elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset':
         build_dataset_function = build_synthetic_vessel_network_data
-    elif config.DATA.DATASET == 'real_eye_vessel_dataset':
+    elif config.DATA.DATASET == 'real_eye_vessel_dataset' or config.DATA.DATASET == 'mixed_real_eye_vessel_dataset':
         build_dataset_function = build_real_vessel_network_data
 
     test_ds = build_dataset_function(
@@ -104,7 +109,7 @@ def test(args):
 
     # load checkpoint
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    net.load_state_dict(checkpoint['net'])
+    net.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
     net.eval()
 
     # init metric
@@ -128,7 +133,7 @@ def test(args):
             nodes = [node.to(args.device,  non_blocking=False) for node in nodes]
             edges = [edge.to(args.device,  non_blocking=False) for edge in edges]
 
-            h, out, _, _ = net(images, seg=False)
+            h, out, _, _, _, _ = net(images, seg=False)
             pred_nodes, pred_edges, pred_nodes_box, pred_nodes_box_score, pred_nodes_box_class, pred_edges_box_score, pred_edges_box_class = relation_infer(
                 h.detach(), out, net, config.MODEL.DECODER.OBJ_TOKEN, config.MODEL.DECODER.RLN_TOKEN,
                 nms=False, map_=True
