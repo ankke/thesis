@@ -204,12 +204,24 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
 
     loss.to(device)
 
-    # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
-    base_metric = SimilarityMetricPCA(
-        output_transform=lambda x: (x["src"], x["domains"]), 
-        similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
-        base_metric=None
-    )
+    if config.DATA.MIXED:
+        # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
+        base_metric = SimilarityMetricPCA(
+            output_transform=lambda x: (x["src"], x["domains"]), 
+            similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
+            base_metric=None
+        )
+        key_train_metric = {"train_cca_similarity": base_metric}
+        additional_metrics = {
+            "train_cka_similarity": SimilarityMetricPCA(
+                output_transform=lambda x: (x["src"], x["domains"]), 
+                similarity_function=batch_cka,
+                base_metric=base_metric
+            ),
+        }
+    else:
+        key_train_metric=None
+        additional_metrics=None
 
     trainer = RelationformerTrainer(
         device=device,
@@ -227,14 +239,8 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         #     )
         # },
         train_handlers=train_handlers,
-        key_train_metric={"train_cca_similarity": base_metric},
-        additional_metrics={
-            "train_cka_similarity": SimilarityMetricPCA(
-                output_transform=lambda x: (x["src"], x["domains"]), 
-                similarity_function=batch_cka,
-                base_metric=base_metric
-            ),
-        }
+        key_train_metric=key_train_metric,
+        additional_metrics=additional_metrics,
         # amp=fp16,
     )
 
