@@ -78,9 +78,11 @@ class SetCriterion(nn.Module):
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         if config.DATA.MIXED:
-            self.domain_loss = nn.NLLLoss(domain_class_weight)
+            self.domain_img_loss = nn.NLLLoss(domain_class_weight)
+            self.domain_inst_loss = nn.NLLLoss(domain_class_weight)
+            self.consistency_loss = nn.MSELoss()
         else:
-            self.domain_loss = None
+            self.domain_loss_class = None
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -262,6 +264,32 @@ class SetCriterion(nn.Module):
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
         return loss
+    
+    def loss_domains(self, img_preds, img_labels, instance_preds, instance_labels):
+        """
+        Implements the loss term from "Domain Adaptive Faster R-CNN for Object Detection in the Wild" (https://arxiv.org/abs/1803.03243)
+        This loss term is used to train the domain classifier
+            Arguments:
+                img_preds: predictions for the image-level domain classification
+                img_labels: ground truth labels for the image-level domain classification
+                instance_preds: predictions for the instance-level domain classification
+                instance_labels: ground truth labels for the instance-level domain classification
+            Returns: 
+                the loss term for the domain classifier
+        """
+        img_preds, non_reverse_img_pred = img_preds
+        instance_preds, non_reverse_instance_preds = instance_preds
+        img_loss = self.domain_img_loss(img_preds, torch.flatten(img_labels))
+        instance_loss = self.domain_inst_loss(instance_preds, instance_labels)
+        
+        # Consistency regularization
+        # Build the average over all feature positions fro each sample in img predictions
+        # Reversing the flattening operation
+        non_reverse_img_pred = torch.reshape(non_reverse_img_pred, (instance_labels.shape[0], -1, 2))
+        mean_non_reverse_img_pred = torch.mean(non_reverse_img_pred, dim=1) # Take the mean over all feature positions
+        consistency_loss = self.consistency_loss(mean_non_reverse_img_pred, non_reverse_instance_preds)
+
+        return img_loss + instance_loss + consistency_loss
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -275,7 +303,7 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def forward(self, h, out, target, pred_domains):
+    def forward(self, h, out, target, pred_backbone_domains, pred_instance_domains):
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -292,8 +320,8 @@ class SetCriterion(nn.Module):
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
         losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
-        if self.domain_loss:
-            losses['domain'] = self.domain_loss(pred_domains, target['domains'])
+        if self.domain_img_loss:
+            losses['domain'] = self.loss_domains(pred_backbone_domains, target['interpolated_domains'], pred_instance_domains, target['domains'])
         else:
             losses['domain'] = -1
         

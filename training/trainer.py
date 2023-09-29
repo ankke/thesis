@@ -7,7 +7,7 @@ import torch
 import gc
 import numpy as np
 
-from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, upsample_examples
+from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, downsample_examples, upsample_examples
 from metrics.svcca import get_cca_similarity, robust_cca_similarity
 
 
@@ -34,8 +34,8 @@ class RelationformerTrainer(SupervisedTrainer):
         iteration = engine.state.iteration
         p = float(iteration + epoch * engine.state.epoch_length) / engine.state.max_epochs / engine.state.epoch_length
         alpha = 2. / (1. + np.exp(-10 * p)) - 1
-        h, out, srcs, pred_domains = self.network[0](images, seg=False, alpha=alpha)
-
+        h, out, srcs, pred_backbone_domains, pred_instance_domains, interpolated_domains = self.network[0](images, seg=False, alpha=alpha, domain_labels=domains)
+        target["interpolated_domains"] = interpolated_domains
         # _, _, seg_srcs = self.network[1](seg, seg=True)
         
         # # valid_token = torch.argmax(out['pred_logits'], -1)
@@ -46,7 +46,7 @@ class RelationformerTrainer(SupervisedTrainer):
 
         #print(torch.concat([torch.exp(pred_domains), domains.unsqueeze(1)], axis=1))
 
-        losses = self.loss_function(h, out, target, pred_domains)
+        losses = self.loss_function(h, out, target, pred_backbone_domains, pred_instance_domains)
         
         # loss_feat = 0
         # for i in range(len(seg_srcs)):
@@ -69,7 +69,7 @@ class RelationformerTrainer(SupervisedTrainer):
     
         self.optimizer.step()
 
-        X_up, Y_up = upsample_examples(srcs[-1][domains == 0].detach().cpu().numpy(),srcs[-1][domains == 1].detach().cpu().numpy())
+        X_up, Y_up = downsample_examples(srcs[-1][domains == 0].detach().cpu().numpy(),srcs[-1][domains == 1].detach().cpu().numpy())
         # Permute and flatten the umsapled numpy arrays
         X_up = np.moveaxis(X_up, 1,3).reshape(-1, X_up.shape[1])
         Y_up = np.moveaxis(Y_up, 1,3).reshape(-1, Y_up.shape[1])

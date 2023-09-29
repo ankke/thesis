@@ -77,12 +77,13 @@ class RelationFormer(nn.Module):
             self.input_proj.requires_grad_(False)
 
         if config.DATA.MIXED:
-            self.domain_discriminator = Discriminator()
+            self.backbone_domain_discriminator = Discriminator(in_size=self.hidden_dim)
+            self.instance_domain_discriminator = Discriminator(in_size=self.hidden_dim*self.num_queries)
 
         self.decoder.decoder.bbox_embed = None
 
 
-    def forward(self, samples, seg=True, alpha=1):
+    def forward(self, samples, seg=True, alpha=1, domain_labels=None):
         if not seg and not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
         elif seg:
@@ -121,9 +122,30 @@ class RelationFormer(nn.Module):
             query_embeds = self.query_embed.weight
             
         if self.config.DATA.MIXED:
-            domain_classifications = self.domain_discriminator(srcs, alpha)
+            domain_features = []
+            replicated_domain_labels = []
+            # We have list of 2d features from each feature level where every level has the shape (batch_size, channels, height, width)
+            # We want to create a tensor where each position in each feature map is viewed as own sample such that each feature level is (batch_size*height*width, channels) and the domain labels are (batch_size*height*width, 1)
+            # This new tensor should be organized in a way such that all feature positions from one sample are grouped together
+            # For example, if we have 2 samples in a batch and 2 feature levels, the tensor should look like this:  
+            # [sample1_level1, sample1_level2, sample2_level1, sample2_level2]
+            for feature in srcs[1:]:
+                # For one feature level, put channel dimension last and flatten the tensor
+                flat_feature = feature.clone().permute(0,2,3,1)
+                # With this operation we get a tensor of shape (batch_size, height*width, channels)
+                flat_feature = torch.flatten(flat_feature.clone(), start_dim=1, end_dim=2)
+                domain_features.append(flat_feature)
+                # Create domain labels by getting a multiplication factor and then replicating each labels from domain_labels to match the number of samples in the feature level to get a tensor of shape (batch_size, height*width)
+                domain_label = domain_labels.unsqueeze(1).repeat_interleave(feature.shape[2] * feature.shape[3], dim=1)
+                replicated_domain_labels.append(domain_label)
+
+            # Now we merge the list of tensors (shape: (batch_size, height*width, channels)) to one tensor (shape: (batch_size*height*width, channels) such that all feature positions from one sample are grouped together
+            conc_features = torch.cat(domain_features, dim=1)
+            conc_labels = torch.cat(replicated_domain_labels, dim=1)
+            backbone_domain_classifications = self.backbone_domain_discriminator(torch.flatten(conc_features.clone(), end_dim=1), alpha)
+            
         else: 
-            domain_classifications = torch.tensor(-1)
+            backbone_domain_classifications = torch.tensor(-1)
     
         hs, init_reference, inter_references, _, _ = self.decoder(
             srcs, masks, query_embeds, pos
@@ -133,9 +155,16 @@ class RelationFormer(nn.Module):
 
         class_prob = self.class_embed(object_token)
         coord_loc = self.bbox_embed(object_token).sigmoid()
+
+        if self.config.DATA.MIXED:
+            # Flatten the tensor but keep batch dimension
+            domain_hs = torch.flatten(hs.clone(), start_dim=1)
+            instance_domain_classifications = self.instance_domain_discriminator(domain_hs, alpha)
+        else:
+            instance_domain_classifications = torch.tensor(-1)
         
         out = {'pred_logits': class_prob, 'pred_nodes': coord_loc}
-        return hs, out, srcs, domain_classifications
+        return hs, out, srcs, backbone_domain_classifications, instance_domain_classifications, conc_labels
 
 
 class MLP(nn.Module):
