@@ -82,7 +82,9 @@ class SetCriterion(nn.Module):
             self.domain_inst_loss = nn.NLLLoss(domain_class_weight)
             self.consistency_loss = nn.MSELoss()
         else:
-            self.domain_loss_class = None
+            self.domain_img_loss = None
+            self.domain_inst_loss = None
+            self.consistency_loss = None
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
