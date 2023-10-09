@@ -348,8 +348,8 @@ def create_feature_representation_visual(similarity_measure):
 
   # Plot X and Y in different colors on a single plot and return the image for the tensorboard handler
   fig, ax = plt.subplots()
-  ax.scatter(X[:,0], X[:,1], c="red", label="source")
-  ax.scatter(Y[:,0], Y[:,1], c="blue", label="target")
+  ax.scatter(X[:,0], X[:,1], c="red", label="source", alpha=0.3)
+  ax.scatter(Y[:,0], Y[:,1], c="blue", label="target", alpha=0.3)
   ax.legend()
   fig.canvas.draw()
   data_2 = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).copy()
