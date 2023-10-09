@@ -261,14 +261,16 @@ class SimilarityMetricPCA(Metric):
   """
   Accumulates a similarity metric over multiple iterations."""
 
-  def __init__(self, output_transform=lambda x:x, device="cpu", similarity_function=batch_cka, base_metric=None, max_samples=5000):
-    self._source_samples = []
-    self._target_samples = []
+  def __init__(self, output_transform=lambda x:x, device="cpu", similarity_function=batch_cka, base_metric=None, max_datapoints=4*10000):
+    self._source_batches = []
+    self._target_batches = []
     self.X, self.Y = None, None
     self.computed = False
     self._similarity_function = similarity_function
     self.device = device
-    self.max_samples = max_samples
+    self.max_datapoints = max_datapoints
+    self.num_source_datapoints = 0
+    self.num_target_datapoints = 0
     if base_metric is not None:
        self.base_metric = base_metric
     else:
@@ -279,24 +281,34 @@ class SimilarityMetricPCA(Metric):
   def reset(self):
     self.computed = False
     if not self.base_metric:
-      del self._source_samples
-      del self._target_samples
+      del self._source_batches
+      del self._target_batches
       gc.collect()
       torch.cuda.empty_cache()
 
-      self._source_samples = []
-      self._target_samples = []
+      self._source_batches = []
+      self._target_batches = []
+      self.num_source_datapoints = 0
+      self.num_target_datapoints = 0
       super(SimilarityMetricPCA, self).reset()
 
   @reinit__is_reduced
   def update(self, output):
     self.computed = False
-    if self.base_metric is None and len(self._source_samples) < self.max_samples and len(self._target_samples) < self.max_samples:
-      features, domains = output
-      X = features[domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu()
-      Y = features[domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu()
-      self._source_samples.append(X)
-      self._target_samples.append(Y)
+    features, domains = output
+
+    if self.base_metric is None:
+      if self.num_source_datapoints < self.max_datapoints:
+        X = features[domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu()
+        self._source_batches.append(X)
+        self.num_source_datapoints += X.shape[0]
+      if self.num_target_datapoints < self.max_datapoints:
+        Y = features[domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu()
+        self._target_batches.append(Y)
+        self.num_target_datapoints += Y.shape[0]
+        
+    del features
+    del domains
 
 
   def get_features(self):
@@ -304,18 +316,20 @@ class SimilarityMetricPCA(Metric):
       return self.X, self.Y
     else:
       # Concatenate list of to single torch tensors
-      X = torch.cat(self._source_samples, axis=0)
-      Y = torch.cat(self._target_samples, axis=0)
+      X = torch.cat(self._source_batches, axis=0)
+      Y = torch.cat(self._target_batches, axis=0)
 
       X, Y = downsample_examples(X, Y)
       X = torch.pca_lowrank(X, q=50)[0].numpy()
       Y = torch.pca_lowrank(Y, q=50)[0].numpy()
       self.X, self.Y = X, Y
 
-      del self._source_samples
-      del self._target_samples
-      self._source_samples = []
-      self._target_samples = []
+      del self._source_batches
+      del self._target_batches
+      self._source_batches = []
+      self._target_batches = []
+      self.num_source_datapoints = 0
+      self.num_target_datapoints = 0
       gc.collect()
 
       self.computed = True
