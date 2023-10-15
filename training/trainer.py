@@ -33,7 +33,7 @@ class RelationformerTrainer(SupervisedTrainer):
         epoch = engine.state.epoch
         iteration = engine.state.iteration
         p = float(iteration + epoch * engine.state.epoch_length) / engine.state.max_epochs / engine.state.epoch_length
-        alpha = 2. / (1. + np.exp(-10 * p)) - 1
+        alpha = (2. / (1. + np.exp(-10 * p)) - 1) * self.alpha_coeff
         h, out, srcs, pred_backbone_domains, pred_instance_domains, interpolated_domains = self.network[0](images, seg=False, alpha=alpha, domain_labels=domains)
         target["interpolated_domains"] = interpolated_domains
         # _, _, seg_srcs = self.network[1](seg, seg=True)
@@ -243,6 +243,8 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
         additional_metrics=additional_metrics,
         # amp=fp16,
     )
+
+    trainer.alpha_coeff = config.TRAIN.ALPHA_COEFF
 
     return trainer
 
