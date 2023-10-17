@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import gc
 import json
+import math
 import shutil
 import torch
 import torchvision.transforms as transforms
@@ -63,7 +64,7 @@ def main(args):
     device = torch.device("cuda") if args.device == 'cuda' else torch.device("cpu")
 
     # Load model
-    model = MoCo(config, device, dim=256, mlp_dim=4096, T=1.0)
+    model = MoCo(config, device, dim=256, mlp_dim=4096, T=0.2)
     model.to(device)
 
     # Load optimizer
@@ -79,6 +80,7 @@ def main(args):
             "learning_rate": float(config.TRAIN.LR),
             "epochs": config.TRAIN.EPOCHS,
             "batch_size": config.DATA.BATCH_SIZE,
+            "accumulated batch size": config.DATA.TARGET_BATCH_SIZE,
         }
     )
 
@@ -133,7 +135,7 @@ def main(args):
     # Training Loop
     for epoch in range(config.TRAIN.EPOCHS):
         print("epoch ", epoch)
-        train(train_loader, model, optimizer, epoch, args, device, accum_iter)
+        train(train_loader, model, optimizer, epoch, args, device, accum_iter, config)
 
         #validate(val_loader, model, epoch, args)
 
@@ -142,11 +144,11 @@ def main(args):
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'optimizer' : optimizer.state_dict(),
-        }, is_best=False, filename='trained_weights/runs/checkpoint_%04d.pth.tar' % epoch)
+        }, is_best=False, filename=f'trained_weights/runs/{args.exp_name}/checkpoint_%04d.pth.tar' % epoch)
 
         
 
-def train(train_loader, model, optimizer, epoch, args, device, accum_iter):
+def train(train_loader, model, optimizer, epoch, args, device, accum_iter, config):
     # switch to train mode
     model.train()
 
@@ -171,6 +173,8 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter):
         k2s.append(k2)
 
         if ((iteration + 1) % accum_iter == 0) or (iteration + 1 == len(train_loader)):
+            # adjust learning rate and momentum coefficient per iteration
+            lr = adjust_learning_rate(optimizer, epoch + iteration / len(train_loader), config.TRAIN.EPOCHS, float(config.TRAIN.LR))
             # Concatenate qs and ks 
             q1, q2, k1, k2 = torch.cat(q1s, dim=0), torch.cat(q2s, dim=0), torch.cat(k1s, dim=0), torch.cat(k2s, dim=0)
 
@@ -189,6 +193,7 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter):
             # Report statistics
             # wandb.log({"augemented_images": wandb_image}})
             wandb.log({"loss": loss.item()})
+            wandb.log({"learning_rate": lr})
 
             q1s, q2s, k1s, k2s = [], [], [], []
             del q1, q2, k1, k2, loss
@@ -197,10 +202,20 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter):
         gc.collect()
         torch.cuda.empty_cache()
 
-def save_checkpoint(state, is_best, filename='trained_weights/runs/checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
+
+def adjust_learning_rate(optimizer, epoch, max_epochs, base_lr):
+    """Decays the learning rate with half-cycle cosine after warmup"""
+    if epoch < 10:
+        lr = base_lr * epoch / 10 
+    else:
+        lr = base_lr * 0.5 * (1. + math.cos(math.pi * (epoch - 10) / (max_epochs - 10)))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    return lr
 
 
 if __name__ == '__main__':

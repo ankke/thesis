@@ -18,7 +18,7 @@ class MoCo(nn.Module):
     Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, config, device, dim=256, mlp_dim=4096, T=1.0):
+    def __init__(self, config, device, dim=256, mlp_dim=4096, T=0.2):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
