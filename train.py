@@ -40,6 +40,8 @@ parser.add_argument('--pretrain_seg', default=False, action="store_true",
                     help="Whether to pretrain on segs instead of raw images")
 parser.add_argument('--no_strict_loading', default=False, action="store_true",
                     help="Whether the model was pretrained with domain adversarial. If true, the checkpoint will be loaded with strict=false")
+parser.add_argument('--sspt', default=False, action="store_true",
+                    help="Whether the model was pretrained with self supervised pretraining. If true, the checkpoint will be loaded accordingly. Only combine with resume.")
 
 
 class obj:
@@ -164,13 +166,17 @@ def main(args):
 
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
-        net.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
-        if args.recover_optim:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-        if args.restore_state:
-            scheduler.load_state_dict(checkpoint['scheduler'])
-            last_epoch = scheduler.last_epoch
-            scheduler.step_size = config.TRAIN.LR_DROP
+
+        if args.sspt:
+            net.load_state_dict(checkpoint['state_dict'], strict=False)
+        else:
+            net.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
+            if args.recover_optim:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+            if args.restore_state:
+                scheduler.load_state_dict(checkpoint['scheduler'])
+                last_epoch = scheduler.last_epoch
+                scheduler.step_size = config.TRAIN.LR_DROP
 
     for param_group in optimizer.param_groups:
         print(f'lr: {param_group["lr"]}, number of params: {len(param_group["params"])}')
