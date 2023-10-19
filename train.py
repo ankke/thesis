@@ -1,3 +1,4 @@
+from functools import partial
 import os
 import yaml
 import json
@@ -95,7 +96,7 @@ def main(args):
         build_dataset_function = build_real_vessel_network_data
         config.DATA.MIXED = False
     elif config.DATA.DATASET == 'mixed_road_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset' or config.DATA.DATASET == "mixed_real_eye_vessel_dataset":
-        build_dataset_function = build_mixed_data
+        build_dataset_function = partial(build_mixed_data, upsample_target_domain=config.DATA.UPSAMPLE_TARGET_DOMAIN)
         config.DATA.MIXED = True
 
     train_ds, val_ds, sampler = build_dataset_function(

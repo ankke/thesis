@@ -4,7 +4,7 @@ from data.dataset_road_network import build_road_network_data
 from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
 import math
 
-def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_grayscale=False):
+def build_mixed_data(config, mode='split', split=0.95, upsample_target_domain=True, max_samples=-1, use_grayscale=False):
     """[summary]
 
     Args:
@@ -42,8 +42,12 @@ def build_mixed_data(config, mode='split', split=0.95, max_samples=0, use_graysc
     print(f"weight sum a: {torch.sum(weights_A)}")
     print(f"weight sum B: {torch.sum(weights_B)}")
 
-    sampler = WeightedRandomSampler(torch.cat([weights_A, weights_B]), num_samples=math.floor(torch.sum(weights_A) + torch.sum(weights_B)))
-    #sampler = None
+    if upsample_target_domain:
+        print("upsampling")
+        sampler = WeightedRandomSampler(torch.cat([weights_A, weights_B]), num_samples=math.floor(torch.sum(weights_A) + torch.sum(weights_B)))
+    else:
+        print("not upsampling")
+        sampler = None
 
     return train_ds, val_ds, sampler
 
