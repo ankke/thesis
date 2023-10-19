@@ -41,9 +41,6 @@ class Vessel2GraphDataLoader(Dataset):
         self.transform = transform
         self.max_nodes = max_nodes
 
-        self.mean = [0.485, 0.456, 0.406]
-        self.std = [0.229, 0.224, 0.225]
-
         self.domain_classification = domain_classification
 
     def __len__(self):
