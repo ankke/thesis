@@ -26,6 +26,8 @@ parser.add_argument('--resume', default=None,
                     help='checkpoint of the last epoch of the model')
 parser.add_argument('--device', default='cuda',
                     help='device to use for training')
+parser.add_argument('--disable_wandb', default=False, action='store_true',
+                    help='disable wandb logging')
 
 class obj:
     def __init__(self, dict1):
@@ -61,6 +63,7 @@ def main(args):
 
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.enabled = True
+    torch.backends.cuda.matmul.allow_tf32 = True
     device = torch.device("cuda") if args.device == 'cuda' else torch.device("cpu")
 
     # Load model
@@ -70,19 +73,21 @@ def main(args):
     # Load optimizer
     optimizer = torch.optim.AdamW(model.parameters(), float(config.TRAIN.LR), weight_decay=float(config.TRAIN.WEIGHT_DECAY))
 
-    # start a new wandb run to track this script
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="relationformer_moco",
-        
-        # track hyperparameters and run metadata
-        config={
-            "learning_rate": float(config.TRAIN.LR),
-            "epochs": config.TRAIN.EPOCHS,
-            "batch_size": config.DATA.BATCH_SIZE,
-            "accumulated batch size": config.DATA.TARGET_BATCH_SIZE,
-        }
-    )
+    if not args.disable_wandb:
+        # start a new wandb run to track this script
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="relationformer_moco",
+            
+            # track hyperparameters and run metadata
+            config={
+                "learning_rate": float(config.TRAIN.LR),
+                "epochs": config.TRAIN.EPOCHS,
+                "batch_size": config.DATA.BATCH_SIZE,
+                "accumulated batch size": config.DATA.TARGET_BATCH_SIZE,
+                "dataset": config.DATA.DATASET,
+            }
+        )
 
     augmentation1 = [
         transforms.RandomResizedCrop(config.DATA.IMG_SIZE, scale=(0.2, 1.)),
@@ -144,7 +149,7 @@ def main(args):
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'optimizer' : optimizer.state_dict(),
-        }, is_best=False, filename=f'trained_weights/runs/{args.exp_name}/checkpoint_%04d.pth.tar' % epoch)
+        }, is_best=False, filename=f'trained_weights/runs/{args.exp_name}_{config.DATA.SEED}/checkpoint_%04d.pth.tar' % epoch)
 
         
 
@@ -153,54 +158,82 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter, confi
     model.train()
 
     # Accumulate qs and ks for accum_iter to compute loss
-    q1s = []
-    q2s = []
     k1s = []
     k2s = []
+    x1s = []
+    x2s = []
 
     for iteration, (x1, x2) in enumerate(tqdm(train_loader)):
         moco_m = 0.99
+        x1s.append(x1)
+        x2s.append(x2)
 
-        # Move data to device
-        x1 = x1.to(device)
-        x2 = x2.to(device)
+        with torch.no_grad():
+            # Move data to device
+            x1 = x1.to(device)
+            x2 = x2.to(device)
 
-        # Forward pass
-        q1, q2, k1, k2 = model(x1, x2, moco_m)
-        q1s.append(q1)
-        q2s.append(q2)
-        k1s.append(k1)
-        k2s.append(k2)
+            model.update_momentum_encoder(moco_m)  # update the momentum encoder
 
+            # Compute ks because they're needed for loss calculation
+            k1, k2 = model.compute_ks(x1, x2, moco_m)
+            k1s.append(k1)
+            k2s.append(k2)
+
+            x1.cpu()
+            x2.cpu()
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        # When all ks are computed, compute qs and loss, and update model
         if ((iteration + 1) % accum_iter == 0) or (iteration + 1 == len(train_loader)):
-            # adjust learning rate and momentum coefficient per iteration
-            lr = adjust_learning_rate(optimizer, epoch + iteration / len(train_loader), config.TRAIN.EPOCHS, float(config.TRAIN.LR))
-            # Concatenate qs and ks 
-            q1, q2, k1, k2 = torch.cat(q1s, dim=0), torch.cat(q2s, dim=0), torch.cat(k1s, dim=0), torch.cat(k2s, dim=0)
+            # Concatenate ks 
+            k1, k2 = torch.cat(k1s, dim=0).to(device), torch.cat(k2s, dim=0).to(device)
+            if k1.shape[0] < config.DATA.TARGET_BATCH_SIZE / 4:
+                print("k1 shape: ", k1.shape)
+                print("skipping last batches")
+                continue
 
-            # compute loss
-            loss = model.contrastive_loss(q1, k2) + model.contrastive_loss(q2, k1)
+            # Loop over all seen samples and compute qs and loss
+            for i, (x1, x2) in enumerate(zip(x1s, x2s)):
+                # adjust learning rate and momentum coefficient per iteration
+                lr = adjust_learning_rate(optimizer, epoch + (iteration - len(x1s) + i) / len(train_loader), config.TRAIN.EPOCHS, float(config.TRAIN.LR))
+                x1 = x1.to(device)
+                x2 = x2.to(device)
 
-            loss.backward()
+                q1, q2 = model(x1, x2)
+
+                # compute loss
+                loss = model.contrastive_loss(q1, k2, i) + model.contrastive_loss(q2, k1, i)
+                # Scale loss
+                loss = loss / len(x1s)
+
+                loss.backward()
+            
+                if not args.disable_wandb:
+                    # print(x1.shape)
+                    # conc_views = torch.cat([x1[0, 0].cpu(), x2[0, 0].cpu()], dim=0)
+                    # wandb_img_logs = []
+
+                    # for img_slice_no in range(32):
+                    #     img = conc_views[:, :, img_slice_no]
+                    #     wandb_img_logs.append(wandb.Image(img, caption=f"Slice: {img_slice_no}"))
+
+                    # wandb.log({"Image Views": wandb_img_logs})
+
+                    # Report statistics
+                    wandb.log({"loss": loss.item()})
+                    wandb.log({"learning_rate": lr})
+
+                del q1, q2, x1, x2, loss
+                torch.cuda.empty_cache()
+                gc.collect()
+
             optimizer.step()
             optimizer.zero_grad()
 
-            # wandb_image = wandb.Image(
-            #     torch.cat([x1[0], x2[0]], dim=1), 
-            #     caption="Top: x1, Bottom: x2"
-            # )
-
-            # Report statistics
-            # wandb.log({"augemented_images": wandb_image}})
-            wandb.log({"loss": loss.item()})
-            wandb.log({"learning_rate": lr})
-
-            q1s, q2s, k1s, k2s = [], [], [], []
-            del q1, q2, k1, k2, loss
-
-        del x1, x2
-        gc.collect()
-        torch.cuda.empty_cache()
+            x1s, x2s, k1s, k2s = [], [], [], []
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)

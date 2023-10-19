@@ -73,7 +73,7 @@ class MoCo(nn.Module):
         self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
     @torch.no_grad()
-    def _update_momentum_encoder(self, m):
+    def update_momentum_encoder(self, m):
         """Momentum update of the momentum encoder"""
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data = param_m.data * m + param_b.data * (1. - m)
@@ -81,7 +81,7 @@ class MoCo(nn.Module):
         for param_b, param_m in zip(self.base_projector.parameters(), self.momentum_projector.parameters()):
             param_m.data = param_m.data * m + param_b.data * (1. - m)
 
-    def contrastive_loss(self, q, k):
+    def contrastive_loss(self, q, k, i):
         # normalize
         q = nn.functional.normalize(q, dim=1)
         k = nn.functional.normalize(k, dim=1)
@@ -89,10 +89,18 @@ class MoCo(nn.Module):
         # Einstein sum is more intuitive
         logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
         N = logits.shape[0]  # batch size per GPU
-        labels = (torch.arange(N, dtype=torch.long)).to(self.device)
+        labels = (torch.arange(N, dtype=torch.long) + N * i).to(self.device)
         return nn.CrossEntropyLoss()(logits, labels) * (2 * self.T)
+    
+    def compute_ks(self, x1, x2, m):
+        with torch.no_grad():  # no gradient
+            # compute momentum features as targets
+            k1 = self.momentum_projector(torch.flatten(self.momentum_encoder(x1)[0], start_dim=1))
+            k2 = self.momentum_projector(torch.flatten(self.momentum_encoder(x2)[0], start_dim=1))
 
-    def forward(self, x1, x2, m):
+        return k1, k2
+
+    def forward(self, x1, x2):
         """
         Input:
             x1: first views of images
@@ -114,11 +122,4 @@ class MoCo(nn.Module):
         q1 = self.predictor(out1)
         q2 = self.predictor(out2)
 
-        with torch.no_grad():  # no gradient
-            self._update_momentum_encoder(m)  # update the momentum encoder
-
-            # compute momentum features as targets
-            k1 = self.momentum_projector(torch.flatten(self.momentum_encoder(x1)[0], start_dim=1))
-            k2 = self.momentum_projector(torch.flatten(self.momentum_encoder(x2)[0], start_dim=1))
-
-        return q1, q2, k1, k2
+        return q1, q2
