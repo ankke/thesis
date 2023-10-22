@@ -4,14 +4,13 @@ import json
 import math
 import shutil
 import torch
-import torchvision.transforms as transforms
 import os
 from tqdm import tqdm
 import wandb
 import yaml
 
 from moco.datasets.road_dataset import build_moco_road_dataset
-from moco.loader import GaussianBlur, Solarize
+from moco.datasets.synth_eye_dataset import build_moco_synth_eye_dataset
 from moco.model import MoCo
 
 os.environ['WANDB_API_KEY'] = '94ab84459aa1b42734e2980087f053e645c271e7'
@@ -89,36 +88,13 @@ def main(args):
             }
         )
 
-    augmentation1 = [
-        transforms.RandomResizedCrop(config.DATA.IMG_SIZE, scale=(0.2, 1.)),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.RandomApply([GaussianBlur([.1, 2.])], p=1.0),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-    ]
-
-    augmentation2 = [
-        transforms.RandomResizedCrop(config.DATA.IMG_SIZE, scale=(0.2, 1.)),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.RandomApply([GaussianBlur([.1, 2.])], p=0.1),
-        transforms.RandomApply([Solarize()], p=0.2),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-    ]
-
     # Create dataset and dataloader
-    train_ds, val_ds = build_moco_road_dataset(config, transforms.Compose(augmentation1), transforms.Compose(augmentation2), max_samples=config.DATA.NUM_SOURCE_SAMPLES)
+    if config.DATA.DATASET == 'road_dataset':
+        train_ds = build_moco_road_dataset(config, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
+    elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
+        train_ds = build_moco_synth_eye_dataset(config, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=config.DATA.BATCH_SIZE, shuffle=True,
-        num_workers=4, pin_memory=True, drop_last=True)
-    val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=config.DATA.BATCH_SIZE, shuffle=False,
         num_workers=4, pin_memory=True, drop_last=True)
     
     # optionally resume from a checkpoint
@@ -213,14 +189,12 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter, confi
             
                 if not args.disable_wandb:
                     # print(x1.shape)
-                    # conc_views = torch.cat([x1[0, 0].cpu(), x2[0, 0].cpu()], dim=0)
-                    # wandb_img_logs = []
-
-                    # for img_slice_no in range(32):
-                    #     img = conc_views[:, :, img_slice_no]
-                    #     wandb_img_logs.append(wandb.Image(img, caption=f"Slice: {img_slice_no}"))
-
-                    # wandb.log({"Image Views": wandb_img_logs})
+                    # # Report images
+                    # wandb_image = wandb.Image(
+                    #     torch.cat([x1[0], x2[0]], dim=1), 
+                    #     caption="Top: x1, Bottom: x2"
+                    # )
+                    # wandb.log({"augemented_images": wandb_image})
 
                     # Report statistics
                     wandb.log({"loss": loss.item()})

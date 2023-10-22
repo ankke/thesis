@@ -1,12 +1,13 @@
 import os
+import numpy as np
+import torch
 from torch.utils.data import Dataset
-import torchvision.transforms.functional as tvf
-from PIL import Image
 from moco.loader import GaussianBlur, Solarize
 import torchvision.transforms as transforms
+from PIL import Image
 
 
-class MoCo_Road_Dataset(Dataset):
+class MoCo_Synth_Eye_Dataset(Dataset):
     """[summary]
 
     Args:
@@ -44,9 +45,6 @@ class MoCo_Road_Dataset(Dataset):
             transforms.ToTensor(),
         ])
 
-        self.mean = [0.485, 0.456, 0.406]
-        self.std = [0.229, 0.224, 0.225]
-
     def __len__(self):
         """[summary]
 
@@ -58,16 +56,19 @@ class MoCo_Road_Dataset(Dataset):
     def __getitem__(self, idx):
         image_data = Image.open(self.data[idx])
 
+        image_data = image_data.convert('RGB')
+
         image_data1 = self.transform1(image_data)
         image_data2 = self.transform2(image_data)
 
-        image_data1 = tvf.normalize(image_data1, mean=self.mean, std=self.std)
-        image_data2 = tvf.normalize(image_data2, mean=self.mean, std=self.std)
+        image_data = torch.tensor(
+            np.array(image_data), dtype=torch.float).permute(2, 0, 1)
+        image_data = (image_data/255.0) - 0.5
 
         return image_data1, image_data2
 
 
-def build_moco_road_dataset(config, max_samples=0):
+def build_moco_synth_eye_dataset(config, max_samples=0):
     img_folder = os.path.join(config.DATA.DATA_PATH, 'raw')
     img_files = []
 
@@ -78,8 +79,8 @@ def build_moco_road_dataset(config, max_samples=0):
     if max_samples > 0:
         img_files = img_files[:max_samples]
         
-    train_ds = MoCo_Road_Dataset(
+    train_ds = MoCo_Synth_Eye_Dataset(
         data=img_files,
-        img_size=config.DATA.IMG_SIZE
+        img_size=config.DATA.IMG_SIZE,
     )
     return train_ds
