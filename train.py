@@ -169,7 +169,8 @@ def main(args):
         checkpoint = torch.load(args.resume, map_location='cpu')
 
         if args.sspt:
-            net.load_state_dict(checkpoint['state_dict'], strict=False)
+            checkpoint['state_dict'] = {k[17:]: v for k, v in checkpoint['state_dict'].items() if k.startswith("momentum_encoder")}
+            net.load_state_dict(checkpoint['state_dict'], strict=True)
         else:
             net.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
             if args.recover_optim:
