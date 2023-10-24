@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import ConcatDataset, WeightedRandomSampler
+from data.dataset_real_eye_vessels import build_real_vessel_network_data
 from data.dataset_road_network import build_road_network_data
 from data.dataset_synthetic_eye_vessels import build_synthetic_vessel_network_data
 import math
@@ -24,7 +25,7 @@ def build_mixed_data(config, mode='split', split=0.95, upsample_target_domain=Tr
     elif config.DATA.DATASET == "mixed_synthetic_eye_vessel_dataset":
         target_train_data, target_val_data, _ = build_synthetic_vessel_network_data(config, mode, split, config.DATA.NUM_TARGET_SAMPLES, use_grayscale, domain_classification=1)
     elif config.DATA.DATASET == "mixed_real_eye_vessel_dataset":
-        target_train_data, target_val_data, _ = build_synthetic_vessel_network_data(config, mode, split, config.DATA.NUM_TARGET_SAMPLES, use_grayscale, domain_classification=1)
+        target_train_data, target_val_data, _ = build_real_vessel_network_data(config, mode, split, config.DATA.NUM_TARGET_SAMPLES, use_grayscale, domain_classification=1)
 
     # Calculate the number of samples in each dataset
     num_samples_A = len(source_train_data)
