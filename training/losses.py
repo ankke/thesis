@@ -81,10 +81,12 @@ class SetCriterion(nn.Module):
             self.domain_img_loss = nn.NLLLoss(domain_class_weight)
             self.domain_inst_loss = nn.NLLLoss(domain_class_weight)
             self.consistency_loss = nn.MSELoss()
+            self.compute_target_graph_loss = config.DATA.COMPUTE_TARGET_GRAPH_LOSS
         else:
             self.domain_img_loss = None
             self.domain_inst_loss = None
             self.consistency_loss = None
+            self.compute_target_graph_loss = True
         self.weight_dict = {'boxes':config.TRAIN.W_BBOX,
                             'class':config.TRAIN.W_CLASS,
                             'cards':config.TRAIN.W_CARD,
@@ -312,6 +314,20 @@ class SetCriterion(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
+        # Remove samples from out and target tensor where domain = 1 
+        if not self.compute_target_graph_loss:
+            print(out['pred_logits'].shape)
+            print(out['pred_nodes'].shape)
+            print(len(target['nodes']))
+            print(len(target['edges']))
+            out['pred_logits'] = out['pred_logits'][target['domains'] == 0]
+            out['pred_nodes'] = out['pred_nodes'][target['domains'] == 0]
+            target['nodes'] = [node_list for i, node_list in enumerate(target['nodes']) if target['domains'][i] == 0]
+            target['edges'] = [node_list for i, node_list in enumerate(target['edges']) if target['domains'][i] == 0]
+            print(out['pred_logits'].shape)
+            print(out['pred_nodes'].shape)
+            print(len(target['nodes']))
+            print(len(target['edges']))
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(out, target)
