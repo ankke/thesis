@@ -10,21 +10,6 @@ import pandas as pd
 from utils.utils import rotate_coordinates
 from torchvision.transforms.functional import rotate
 
-# train_transform = Compose(
-#     [
-#         Flip,
-#         Rotate90,
-#         ToTensor,
-#     ]
-# )
-train_transform = []
-# val_transform = Compose(
-#     [
-#         ToTensor,
-#     ]
-# )
-val_transform = []
-
 
 class Vessel2GraphDataLoader(Dataset):
     """[summary]
@@ -33,7 +18,7 @@ class Vessel2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, augment, max_nodes, domain_classification=-1):
+    def __init__(self, data, augment, domain_classification=-1):
         """[summary]
 
         Args:
@@ -42,10 +27,6 @@ class Vessel2GraphDataLoader(Dataset):
         """
         self.data = data
         self.augment = augment
-        self.max_nodes = max_nodes
-
-        self.mean = [0.485, 0.456, 0.406]
-        self.std = [0.229, 0.224, 0.225]
 
         self.domain_classification = domain_classification
 
@@ -128,7 +109,6 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             augment=True,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
     elif mode == 'test':
@@ -159,7 +139,6 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             augment=False,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
     elif mode == 'split':
@@ -196,13 +175,11 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
         train_ds = Vessel2GraphDataLoader(
             data=train_files,
             augment=True,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )
         val_ds = Vessel2GraphDataLoader(
             data=val_files,
             augment=False,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )
         return train_ds, val_ds, None

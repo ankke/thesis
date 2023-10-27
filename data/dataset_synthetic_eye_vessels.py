@@ -6,21 +6,8 @@ import pyvista
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision.transforms.functional as tvf
-
-# train_transform = Compose(
-#     [
-#         Flip,
-#         Rotate90,
-#         ToTensor,
-#     ]
-# )
-train_transform = []
-# val_transform = Compose(
-#     [
-#         ToTensor,
-#     ]
-# )
-val_transform = []
+from utils.utils import rotate_coordinates
+from torchvision.transforms.functional import rotate
 
 
 class Vessel2GraphDataLoader(Dataset):
@@ -30,7 +17,7 @@ class Vessel2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, transform, max_nodes, domain_classification=-1):
+    def __init__(self, data, augment, max_nodes, domain_classification=-1):
         """[summary]
 
         Args:
@@ -38,7 +25,7 @@ class Vessel2GraphDataLoader(Dataset):
             transform ([type]): [description]
         """
         self.data = data
-        self.transform = transform
+        self.augment = augment
         self.max_nodes = max_nodes
 
         self.domain_classification = domain_classification
@@ -83,7 +70,15 @@ class Vessel2GraphDataLoader(Dataset):
             lines = lines[lines[:, 0] < self.max_nodes]
             lines = lines[lines[:, 1] < self.max_nodes]
 
-        return image_data-0.5, seg_data-0.5, coordinates[:self.max_nodes, :2], lines, self.domain_classification
+        nodes = coordinates[:self.max_nodes, :2]
+
+        if self.augment:
+            angle = random.randint(0, 3) * 90
+            image_data = rotate(image_data, angle)
+            seg_data = rotate(seg_data, angle)
+            nodes = rotate_coordinates(nodes, angle)
+
+        return image_data-0.5, seg_data-0.5, nodes, lines, self.domain_classification
 
 
 def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False, domain_classification=-1):
@@ -113,7 +108,7 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
         ]
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
-            transform=train_transform,
+            augment=True,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
@@ -137,7 +132,7 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
 
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
-            transform=val_transform,
+            augment=False,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN
         )
         return ds
@@ -167,13 +162,13 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
 
         train_ds = Vessel2GraphDataLoader(
             data=train_files,
-            transform=train_transform,
+            augment=True,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )
         val_ds = Vessel2GraphDataLoader(
             data=val_files,
-            transform=val_transform,
+            augment=False,
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )

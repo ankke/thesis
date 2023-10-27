@@ -316,18 +316,22 @@ class SetCriterion(nn.Module):
         """
         # Remove samples from out and target tensor where domain = 1 
         if not self.compute_target_graph_loss:
-            print(out['pred_logits'].shape)
-            print(out['pred_nodes'].shape)
-            print(len(target['nodes']))
-            print(len(target['edges']))
             out['pred_logits'] = out['pred_logits'][target['domains'] == 0]
             out['pred_nodes'] = out['pred_nodes'][target['domains'] == 0]
             target['nodes'] = [node_list for i, node_list in enumerate(target['nodes']) if target['domains'][i] == 0]
             target['edges'] = [node_list for i, node_list in enumerate(target['edges']) if target['domains'][i] == 0]
-            print(out['pred_logits'].shape)
-            print(out['pred_nodes'].shape)
-            print(len(target['nodes']))
-            print(len(target['edges']))
+        
+        # When all samples have been removed - return 0 loss
+        if len(target['nodes']) == 0:
+            return {
+                'total':torch.tensor(0).to(h.get_device()),
+                'class':torch.tensor(0).to(h.get_device()),
+                'nodes':torch.tensor(0).to(h.get_device()),
+                'boxes':torch.tensor(0).to(h.get_device()),
+                'edges':torch.tensor(0).to(h.get_device()),
+                'cards':torch.tensor(0).to(h.get_device()),
+                'domain':torch.tensor(0).to(h.get_device())
+            }
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(out, target)
