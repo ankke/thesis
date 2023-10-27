@@ -8,6 +8,7 @@ import os
 from tqdm import tqdm
 import wandb
 import yaml
+from moco.datasets.real_eye_dataset import build_moco_real_eye_dataset
 
 from moco.datasets.road_dataset import build_moco_road_dataset
 from moco.datasets.synth_eye_dataset import build_moco_synth_eye_dataset
@@ -93,6 +94,8 @@ def main(args):
         train_ds = build_moco_road_dataset(config, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
     elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
         train_ds = build_moco_synth_eye_dataset(config, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
+    elif config.DATA.DATASET == 'real_eye_vessel_dataset':
+        train_ds = build_moco_real_eye_dataset(config, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=config.DATA.BATCH_SIZE, shuffle=True,
         num_workers=4, pin_memory=True, drop_last=True)

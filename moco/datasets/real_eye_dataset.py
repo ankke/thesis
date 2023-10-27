@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 
-class MoCo_Synth_Eye_Dataset(Dataset):
+class MoCo_Real_Eye_Dataset(Dataset):
     """[summary]
 
     Args:
@@ -53,6 +53,7 @@ class MoCo_Synth_Eye_Dataset(Dataset):
         """
         return len(self.data)
 
+
     def __getitem__(self, idx):
         image_data = Image.open(self.data[idx])
 
@@ -64,7 +65,7 @@ class MoCo_Synth_Eye_Dataset(Dataset):
         return (image_data1/255.0) - 0.5, (image_data2/255.0) - 0.5
 
 
-def build_moco_synth_eye_dataset(config, max_samples=0):
+def build_moco_real_eye_dataset(config, max_samples=0):
     img_folder = os.path.join(config.DATA.DATA_PATH, 'raw')
     img_files = []
 
@@ -75,7 +76,7 @@ def build_moco_synth_eye_dataset(config, max_samples=0):
     if max_samples > 0:
         img_files = img_files[:max_samples]
         
-    train_ds = MoCo_Synth_Eye_Dataset(
+    train_ds = MoCo_Real_Eye_Dataset(
         data=img_files,
         img_size=config.DATA.IMG_SIZE,
     )
