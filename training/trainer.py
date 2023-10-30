@@ -69,26 +69,15 @@ class RelationformerTrainer(SupervisedTrainer):
     
         self.optimizer.step()
 
-        X_up, Y_up = downsample_examples(srcs[-1][domains == 0].detach().cpu().numpy(),srcs[-1][domains == 1].detach().cpu().numpy())
-        # Permute and flatten the umsapled numpy arrays
-        X_up = np.moveaxis(X_up, 1,3).reshape(-1, X_up.shape[1])
-        Y_up = np.moveaxis(Y_up, 1,3).reshape(-1, Y_up.shape[1])
-
-        cka_similarity = batch_cka(X_up,Y_up)
-        similarities = {
-            "cka": cka_similarity
-        }
         del images
         del seg
         del nodes
         del edges
         del target
-        del X_up
-        del Y_up
         gc.collect()
         torch.cuda.empty_cache()
 
-        return {"src": srcs[-1], "loss": losses, "similarities": similarities, "domains": domains}
+        return {"src": srcs[-1], "loss": losses, "domains": domains}
 
 
 def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer,
@@ -129,14 +118,6 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_interval=5,
             n_saved=5
-        ),
-        TensorBoardStatsHandler(
-            writer,
-            tag_name="iteration_cka_similarity",
-            output_transform=lambda x: x["similarities"]["cka"],
-            global_epoch_transform=lambda x: scheduler.last_epoch,
-            epoch_log=True,
-            epoch_interval=1
         ),
         TensorBoardStatsHandler(
             writer,

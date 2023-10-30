@@ -6,23 +6,10 @@ import torch
 import pyvista
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as tvf
+from torchvision.transforms import Grayscale
 from PIL import Image
-
-# train_transform = Compose(
-#     [
-#         Flip,
-#         Rotate90,
-#         ToTensor,
-#     ]
-# )
-train_transform = []
-# val_transform = Compose(
-#     [
-#         ToTensor,
-#     ]
-# )
-val_transform = []
-
+from utils.utils import rotate_coordinates
+from torchvision.transforms.functional import rotate
 
 class Sat2GraphDataLoader(Dataset):
     """[summary]
@@ -31,7 +18,7 @@ class Sat2GraphDataLoader(Dataset):
         Dataset ([type]): [description]
     """
 
-    def __init__(self, data, transform, use_grayscale=False, domain_classification=-1):
+    def __init__(self, data, augment, use_grayscale=False, domain_classification=-1):
         """[summary]
 
         Args:
@@ -39,13 +26,14 @@ class Sat2GraphDataLoader(Dataset):
             transform ([type]): [description]
         """
         self.data = data
-        self.transform = transform
+        self.augment = augment
 
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
         self.domain_classification = domain_classification
 
         self.use_grayscale = use_grayscale
+        self.grayscale = Grayscale(num_output_channels=3)
 
     def __len__(self):
         """[summary]
@@ -72,25 +60,33 @@ class Sat2GraphDataLoader(Dataset):
         seg_data = np.array(seg_data)/np.max(seg_data)
         seg_data = torch.tensor(seg_data, dtype=torch.int).unsqueeze(0)
 
+        image_data = Image.open(data['img'])
+
         if self.use_grayscale:
-            image_data = np.array(raw_seg_data.convert('RGB'))
+            image_data = np.array(self.grayscale(image_data))
             image_data = torch.tensor(
                 image_data, dtype=torch.float).permute(2, 0, 1)
             image_data = image_data / 255.0
             image_data -= 0.5
         else:
-            image_data = np.array(Image.open(data['img']))
+            image_data = np.array(image_data)
             image_data = torch.tensor(
                 image_data, dtype=torch.float).permute(2, 0, 1)
             image_data = image_data / 255.0
             image_data = tvf.normalize(image_data.clone().detach(), mean=self.mean, std=self.std)
 
         coordinates = torch.tensor(np.float32(
-            np.asarray(vtk_data.points)), dtype=torch.float)
+            np.asarray(vtk_data.points)), dtype=torch.float)[:, :2]
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
 
-        return image_data, seg_data-0.5, coordinates[:, :2], lines[:, 1:], self.domain_classification
+        if self.augment:
+            angle = random.randint(0, 3) * 90
+            image_data = rotate(image_data, angle)
+            seg_data = rotate(seg_data, angle)
+            nodes = rotate_coordinates(coordinates, angle)
+
+        return image_data, seg_data-0.5, nodes, lines[:, 1:], self.domain_classification
 
 
 def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False, domain_classification=-1):
@@ -123,7 +119,7 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
         ]
         ds = Sat2GraphDataLoader(
             data=data_dicts,
-            transform=train_transform,
+            augment=True,
             use_grayscale=use_grayscale
         )
         return ds
@@ -149,8 +145,8 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
             data_dicts = data_dicts[:max_samples]
         ds = Sat2GraphDataLoader(
             data=data_dicts,
-            transform=val_transform,
-            use_grayscale=use_grayscale
+            use_grayscale=use_grayscale,
+            augment=False
         )
         return ds
     elif mode == 'split':
@@ -182,14 +178,14 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
             
         train_ds = Sat2GraphDataLoader(
             data=train_files,
-            transform=train_transform,
             use_grayscale=use_grayscale,
             domain_classification=domain_classification,
+            augment=True
         )
         val_ds = Sat2GraphDataLoader(
             data=val_files,
-            transform=val_transform,
             use_grayscale=use_grayscale,
-            domain_classification=domain_classification
+            domain_classification=domain_classification,
+            augment=False
         )
         return train_ds, val_ds, None

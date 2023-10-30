@@ -17,7 +17,7 @@ def build_mixed_data(config, mode='split', split=0.95, upsample_target_domain=Tr
         [type]: [description]
     """
     config.DATA.DATA_PATH = config.DATA.SOURCE_DATA_PATH
-    source_train_data, source_val_data, _ = build_road_network_data(config, mode, split, config.DATA.NUM_SOURCE_SAMPLES, use_grayscale, domain_classification=0)
+    source_train_data, source_val_data, _ = build_road_network_data(config, mode, split, config.DATA.NUM_SOURCE_SAMPLES, use_grayscale=config.DATA.TARGET_DATA_PATH != "mixed_road_dataset", domain_classification=0)
 
     config.DATA.DATA_PATH = config.DATA.TARGET_DATA_PATH
     if config.DATA.DATASET == "mixed_road_dataset":
