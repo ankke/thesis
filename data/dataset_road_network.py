@@ -75,7 +75,7 @@ class Sat2GraphDataLoader(Dataset):
             image_data = image_data / 255.0
             image_data = tvf.normalize(image_data.clone().detach(), mean=self.mean, std=self.std)
 
-        coordinates = torch.tensor(np.float32(
+        nodes = torch.tensor(np.float32(
             np.asarray(vtk_data.points)), dtype=torch.float)[:, :2]
         lines = torch.tensor(np.asarray(
             vtk_data.lines.reshape(-1, 3)), dtype=torch.int64)
@@ -84,7 +84,7 @@ class Sat2GraphDataLoader(Dataset):
             angle = random.randint(0, 3) * 90
             image_data = rotate(image_data, angle)
             seg_data = rotate(seg_data, angle)
-            nodes = rotate_coordinates(coordinates, angle)
+            nodes = rotate_coordinates(nodes, angle)
 
         return image_data, seg_data-0.5, nodes, lines[:, 1:], self.domain_classification
 
