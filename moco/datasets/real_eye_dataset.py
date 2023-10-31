@@ -5,6 +5,16 @@ from torch.utils.data import Dataset
 from moco.loader import GaussianBlur, Solarize
 import torchvision.transforms as transforms
 from PIL import Image
+import random
+import torchvision.transforms.functional as TF
+
+class DiscreteRotation:
+    def __init__(self, angles):
+        self.angles = angles
+
+    def __call__(self, x):
+        angle = random.choice(self.angles)
+        return TF.rotate(x, angle)
 
 
 class MoCo_Real_Eye_Dataset(Dataset):
@@ -23,24 +33,15 @@ class MoCo_Real_Eye_Dataset(Dataset):
         """
         self.data = data
         self.transform1 = transforms.Compose([
-            transforms.RandomResizedCrop(img_size, scale=(0.2, 1.)),
-            transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([GaussianBlur([.1, 2.])], p=1.0),
+            transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
+            DiscreteRotation([0,90,180, 270]),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
 
         self.transform2 = transforms.Compose([
-            transforms.RandomResizedCrop(img_size, scale=(0.2, 1.)),
-            transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([GaussianBlur([.1, 2.])], p=0.1),
-            transforms.RandomApply([Solarize()], p=0.2),
+            transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
+            DiscreteRotation([0,90,180, 270]),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])

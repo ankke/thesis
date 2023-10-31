@@ -86,6 +86,7 @@ def main(args):
                 "batch_size": config.DATA.BATCH_SIZE,
                 "accumulated batch size": config.DATA.TARGET_BATCH_SIZE,
                 "dataset": config.DATA.DATASET,
+                "exp_name": args.exp_name,
             }
         )
 
@@ -186,7 +187,7 @@ def train(train_loader, model, optimizer, epoch, args, device, accum_iter, confi
                 # compute loss
                 loss = model.contrastive_loss(q1, k2, i) + model.contrastive_loss(q2, k1, i)
                 # Scale loss
-                loss = loss / len(x1s)
+                loss = loss / accum_iter
 
                 loss.backward()
             

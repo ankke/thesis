@@ -30,9 +30,9 @@ def main(args):
     image_id = 0
 
     # Loop through each source image in the source directory
-    for i in tqdm(range(200)):
+    for i in tqdm(range(500)):
         # Read the image
-        img_path = os.path.join(src_dir, f"{i}_scan.png")
+        img_path = os.path.join(src_dir, "real_images", f"{10001 + i}.bmp")
         image = imageio.imread(img_path)
 
         # Get the dimensions of the source and target image and padding
@@ -43,8 +43,10 @@ def main(args):
         p_w = p_w - 2*pad_w
 
         h, w = image.shape
-        x_ = np.int32(np.linspace(5, h-5-p_h, 22))
-        y_ = np.int32(np.linspace(5, w-5-p_w, 22))
+        patch_num = h // 40
+        print(patch_num)
+        x_ = np.int32(np.linspace(5, h-5-p_h, patch_num))
+        y_ = np.int32(np.linspace(5, w-5-p_w, patch_num))
 
         grid = np.meshgrid(x_, y_, indexing='ij')
 
