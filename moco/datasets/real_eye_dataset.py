@@ -33,16 +33,16 @@ class MoCo_Real_Eye_Dataset(Dataset):
         """
         self.data = data
         self.transform1 = transforms.Compose([
-            transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
+            #transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
             DiscreteRotation([0,90,180, 270]),
-            transforms.RandomHorizontalFlip(),
+            #transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
 
         self.transform2 = transforms.Compose([
-            transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
+            #transforms.RandomResizedCrop(img_size, scale=(0.5, 1.)),
             DiscreteRotation([0,90,180, 270]),
-            transforms.RandomHorizontalFlip(),
+            #transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
 

@@ -102,12 +102,13 @@ def main(args):
         num_workers=4, pin_memory=True, drop_last=True)
     
     # optionally resume from a checkpoint
+    start_epoch = 0
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
             # Map model to be loaded to specified single gpu.
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
+            start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -118,7 +119,7 @@ def main(args):
     accum_iter = config.DATA.TARGET_BATCH_SIZE // config.DATA.BATCH_SIZE
 
     # Training Loop
-    for epoch in range(config.TRAIN.EPOCHS):
+    for epoch in range(start_epoch, config.TRAIN.EPOCHS):
         print("epoch ", epoch)
         train(train_loader, model, optimizer, epoch, args, device, accum_iter, config)
 
