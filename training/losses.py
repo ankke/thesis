@@ -78,10 +78,10 @@ class SetCriterion(nn.Module):
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         if config.DATA.MIXED:
-            self.domain_img_loss = nn.NLLLoss(domain_class_weight)
-            self.domain_inst_loss = nn.NLLLoss(domain_class_weight)
-            self.consistency_loss = nn.MSELoss()
-            self.compute_target_graph_loss = config.DATA.COMPUTE_TARGET_GRAPH_LOSS
+            self.domain_img_loss = nn.NLLLoss(domain_class_weight) if config.TRAIN.IMAGE_ADVERSARIAL else None
+            self.domain_inst_loss = nn.NLLLoss(domain_class_weight) if config.TRAIN.GRAPH_ADVERSARIAL else None
+            self.consistency_loss = nn.MSELoss() if config.TRAIN.CONSISTENCY_REGULARIZATION else None
+            self.compute_target_graph_loss = config.TRAIN.COMPUTE_TARGET_GRAPH_LOSS
         else:
             self.domain_img_loss = None
             self.domain_inst_loss = None
@@ -281,19 +281,23 @@ class SetCriterion(nn.Module):
             Returns: 
                 the loss term for the domain classifier
         """
+        domain_loss = 0
         img_preds, non_reverse_img_pred = img_preds
         instance_preds, non_reverse_instance_preds = instance_preds
-        img_loss = self.domain_img_loss(img_preds, torch.flatten(img_labels))
-        instance_loss = self.domain_inst_loss(instance_preds, instance_labels)
-        
-        # Consistency regularization
-        # Build the average over all feature positions fro each sample in img predictions
-        # Reversing the flattening operation
-        non_reverse_img_pred = torch.reshape(non_reverse_img_pred, (instance_labels.shape[0], -1, 2))
-        mean_non_reverse_img_pred = torch.mean(non_reverse_img_pred, dim=1) # Take the mean over all feature positions
-        consistency_loss = self.consistency_loss(mean_non_reverse_img_pred, non_reverse_instance_preds)
 
-        return img_loss + instance_loss + consistency_loss
+        if self.domain_img_loss is not None:
+            domain_loss += self.domain_img_loss(img_preds, torch.flatten(img_labels))
+        if self.domain_inst_loss is not None:
+            domain_loss += self.domain_inst_loss(instance_preds, instance_labels)
+        if self.domain_img_loss is not None and self.domain_inst_loss  is not None and self.consistency_loss is not None:
+            # Consistency regularization
+            # Build the average over all feature positions fro each sample in img predictions
+            # Reversing the flattening operation
+            non_reverse_img_pred = torch.reshape(non_reverse_img_pred, (instance_labels.shape[0], -1, 2))
+            mean_non_reverse_img_pred = torch.mean(non_reverse_img_pred, dim=1) # Take the mean over all feature positions
+            domain_loss += self.consistency_loss(mean_non_reverse_img_pred, non_reverse_instance_preds)
+
+        return domain_loss
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices

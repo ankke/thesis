@@ -96,7 +96,7 @@ def main(args):
         build_dataset_function = build_real_vessel_network_data
         config.DATA.MIXED = False
     elif config.DATA.DATASET == 'mixed_road_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset' or config.DATA.DATASET == "mixed_real_eye_vessel_dataset":
-        build_dataset_function = partial(build_mixed_data, upsample_target_domain=config.DATA.UPSAMPLE_TARGET_DOMAIN)
+        build_dataset_function = partial(build_mixed_data, upsample_target_domain=config.TRAIN.UPSAMPLE_TARGET_DOMAIN)
         config.DATA.MIXED = True
 
     train_ds, val_ds, sampler = build_dataset_function(
@@ -129,7 +129,7 @@ def main(args):
         net,
         num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
         edge_upsampling=config.TRAIN.EDGE_UPSAMPLING,
-        domain_class_weight=torch.tensor(config.DATA.DOMAIN_WEIGHTING, device=device)
+        domain_class_weight=torch.tensor(config.TRAIN.DOMAIN_WEIGHTING, device=device)
     )
     val_loss = SetCriterion(config, matcher, net, num_edge_samples=9999, edge_upsampling=False)
 
