@@ -100,8 +100,10 @@ def test(args):
         config, mode='test', max_samples=args.max_samples, use_grayscale=args.pretrain_seg
     )
 
+    # The batch size is 1 such that we can leave the same implementation for the folding standard deviation
+    batch_size = 1
     test_loader = DataLoader(test_ds,
-                            batch_size=config.DATA.TEST_BATCH_SIZE,
+                            batch_size=batch_size,
                             shuffle=True,
                             num_workers=config.DATA.NUM_WORKERS,
                             collate_fn=image_graph_collate_road_network,
@@ -122,6 +124,20 @@ def test(args):
 
     topo_results = []
     beta_errors = []
+
+    folds_smd = []
+    folds_node_mAP = []
+    folds_node_mAR = []
+    folds_edge_mAP = []
+    folds_edge_mAR = []
+    folds_topo_precision = []
+    folds_topo_recall = []
+
+    fold_size = int(len(test_ds)/ 5)
+    print(len(test_ds))
+    print(fold_size)
+
+
     with torch.no_grad():
         print('Started processing test set.')
         for i, batchdata in enumerate(tqdm(test_loader)):
@@ -153,19 +169,19 @@ def test(args):
             )
 
             # Calculate betti scores
-            for nodes_sample, edges_sample, pred_nodes_sample, pred_edges_sample in zip(nodes, edges, pred_nodes, pred_edges):
-                G1 = nx.Graph()
-                G1.add_nodes_from([i for i, n in enumerate(nodes_sample)])
-                G1.add_edges_from([tuple(e) for e in edges_sample.cpu().tolist()])
-                connected_components = len(list(nx.connected_components(G1)))
-                beta_gt = np.array([connected_components, len(G1.edges) + connected_components - len(G1.nodes)])
+            # for nodes_sample, edges_sample, pred_nodes_sample, pred_edges_sample in zip(nodes, edges, pred_nodes, pred_edges):
+            #     G1 = nx.Graph()
+            #     G1.add_nodes_from([i for i, n in enumerate(nodes_sample)])
+            #     G1.add_edges_from([tuple(e) for e in edges_sample.cpu().tolist()])
+            #     connected_components = len(list(nx.connected_components(G1)))
+            #     beta_gt = np.array([connected_components, len(G1.edges) + connected_components - len(G1.nodes)])
 
-                G2 = nx.Graph()
-                G2.add_nodes_from([i for i, n in enumerate(pred_nodes_sample)])
-                G2.add_edges_from([tuple(e) for e in pred_edges_sample])
-                connected_components = len(list(nx.connected_components(G2)))
-                beta_pred = np.array([connected_components, len(G2.edges) + connected_components - len(G2.nodes)])
-                beta_errors.append(2 * np.abs(beta_pred - beta_gt) / (beta_gt + beta_pred + 1e-10))
+            #     G2 = nx.Graph()
+            #     G2.add_nodes_from([i for i, n in enumerate(pred_nodes_sample)])
+            #     G2.add_edges_from([tuple(e) for e in pred_edges_sample])
+            #     connected_components = len(list(nx.connected_components(G2)))
+            #     beta_pred = np.array([connected_components, len(G2.edges) + connected_components - len(G2.nodes)])
+            #     beta_errors.append(2 * np.abs(beta_pred - beta_gt) / (beta_gt + beta_pred + 1e-10))
 
             # Add elements of current batch elem to edge map evaluator
             pred_edges_box = []
@@ -187,52 +203,116 @@ def test(args):
                 gt_boxes=gt_edges_box,
                 gt_classes=[np.ones((edges_.shape[0],)) for edges_ in edges]
             )
-            
+        
             for node_, edge_, pred_node_, pred_edge_ in zip(nodes, edges, pred_nodes, pred_edges):
                 topo_results.append(compute_topo(node_.cpu(), edge_.cpu(), pred_node_, pred_edge_))
 
-            """if i >= 0:
-                break"""
+            if i % fold_size == (fold_size - 1):
+                print('Fold finished')
+                topo_array=np.array(topo_results)
+                folds_topo_precision.append(topo_array.mean(0)[0])
+                folds_topo_recall.append(topo_array.mean(0)[1])
 
-    topo_array=np.array(topo_results)
-    print(f'topo mean: {topo_array.mean(0)}')
-    print(f'topo std: {topo_array.std(0)}')
-    # Determine smd
-    smd_mean = torch.tensor(smd_results).mean().item()
-    smd_std = torch.tensor(smd_results).std().item()
-    print(f'smd value: mean {smd_mean}, std {smd_std}\n')
+                folds_smd.append(torch.tensor(smd_results).mean().item())
 
-    # Determine node box ap / ar
-    node_metric_scores = metric_node_map.eval()
-    edge_metric_scores = metric_edge_map.eval()
-    print("Node scores")
-    print(json.dumps(node_metric_scores, sort_keys=True, indent=4))
-    print("####################################################################################")
-    print("Edge scores")
-    print(json.dumps(edge_metric_scores, sort_keys=True, indent=4))
+                # Determine node box ap / ar
+                node_metric_scores = metric_node_map.eval()
+                edge_metric_scores = metric_edge_map.eval()
 
-    b0, b1 = np.mean(beta_errors, axis=0)
-    b0_std, b1_std = np.std(beta_errors, axis=0)
+                folds_node_mAP.append(node_metric_scores['mAP_IoU_0.50_0.95_0.05_MaxDet_100'][0])
+                folds_node_mAR.append(node_metric_scores['mAR_IoU_0.50_0.95_0.05_MaxDet_100'][0])
+                folds_edge_mAP.append(edge_metric_scores['mAP_IoU_0.50_0.95_0.05_MaxDet_100'][0])
+                folds_edge_mAR.append(edge_metric_scores['mAR_IoU_0.50_0.95_0.05_MaxDet_100'][0])
 
-    print("Betti-error:", b0, b1)
-    print("Betti-error std:", b0_std, b1_std)
+                # Reset metrics
+                smd_results = []
+                topo_results = []
+                metric_node_map.reset()
+                metric_edge_map.reset()
 
-    csv_value_string = f'{smd_mean};{smd_std}'
-    csv_header_string = f'smd;smd-(std)'
 
-    csv_value_string += f';{topo_array.mean(0)[0]};{topo_array.std(0)[0]};{topo_array.mean(0)[1]};{topo_array.std(0)[1]}'
-    csv_header_string += f';topo-prec;topo-pred-(std);topo-rec;topo-rec-(std)'
 
-    csv_value_string += f';{b0};{b0_std};{b1};{b1_std}'
-    csv_header_string += f';b0;b0-(std);b1;b1-(std)'
+    print('Finished processing test set.')
+    print(len(folds_smd))
+    smd = torch.tensor(folds_smd).mean()
+    smd_std = torch.tensor(folds_smd).std()
+    node_mAP = torch.tensor(folds_node_mAP).mean()
+    node_mAP_std = torch.tensor(folds_node_mAP).std()
+    node_mAR = torch.tensor(folds_node_mAR).mean()
+    node_mAR_std = torch.tensor(folds_node_mAR).std()
+    edge_mAP = torch.tensor(folds_edge_mAP).mean()
+    edge_mAP_std = torch.tensor(folds_edge_mAP).std()
+    edge_mAR = torch.tensor(folds_edge_mAR).mean()
+    edge_mAR_std = torch.tensor(folds_edge_mAR).std()
+    topo_precision = torch.tensor(folds_topo_precision).mean()
+    topo_precision_std = torch.tensor(folds_topo_precision).std()
+    topo_recall = torch.tensor(folds_topo_recall).mean()
+    topo_recall_std = torch.tensor(folds_topo_recall).std()
 
-    for field in node_metric_scores:
-        csv_header_string += f';node_{field};node_{field}-(std)'
-        csv_value_string += f';{node_metric_scores[field][0]};{node_metric_scores[field][1]}'
+    print("smd: ", torch.tensor(folds_smd).mean().item())
+    print("smd std: ", torch.tensor(folds_smd).std().item())
+    print("node mAP: ", torch.tensor(folds_node_mAP).mean().item())
+    print("node mAP std: ", torch.tensor(folds_node_mAP).std().item())
+    print("node mAR: ", torch.tensor(folds_node_mAR).mean().item())
+    print("node mAR std: ", torch.tensor(folds_node_mAR).std().item())
+    print("edge mAP: ", torch.tensor(folds_edge_mAP).mean().item())
+    print("edge mAP std: ", torch.tensor(folds_edge_mAP).std().item())
+    print("edge mAR: ", torch.tensor(folds_edge_mAR).mean().item())
+    print("edge mAR std: ", torch.tensor(folds_edge_mAR).std().item())
+    print("topo precision: ", torch.tensor(folds_topo_precision).mean().item())
+    print("topo precision std: ", torch.tensor(folds_topo_precision).std().item())
+    print("topo recall: ", torch.tensor(folds_topo_recall).mean().item())
+    print("topo recall std: ", torch.tensor(folds_topo_recall).std().item())
 
-    for field in edge_metric_scores:
-        csv_header_string += f';edge_{field};edge_{field}-(std)'
-        csv_value_string += f';{edge_metric_scores[field][0]};{edge_metric_scores[field][1]}'
+    csv_value_string = f'{smd};{smd_std};{topo_precision};{topo_precision_std};{topo_recall};{topo_recall_std};{node_mAP};{node_mAP_std};{node_mAR};{node_mAR_std};{edge_mAP};{edge_mAP_std};{edge_mAR};{edge_mAR_std}'
+    csv_header_string = f'smd;smd-(std);topo-prec;topo-prec-(std);topo-rec;topo-rec-(std);node-mAP;node-mAP-(std);node-mAR;node-mAR-(std);edge-mAP;edge-mAP-(std);edge-mAR;edge-mAR-(std)'
+
+    for fold_no in range(5):
+        csv_value_string += f';{folds_smd[fold_no]};{folds_topo_precision[fold_no]};{folds_topo_recall[fold_no]};{folds_node_mAP[fold_no]};{folds_node_mAR[fold_no]};{folds_edge_mAP[fold_no]};{folds_edge_mAP[fold_no]}'
+        csv_header_string += f';fold{fold_no}_smd;fold{fold_no}_topo_precision;fold{fold_no}_topo_recall;fold{fold_no}_node_mAP;fold{fold_no}_node_mAR;fold{fold_no}_edge_mAP;fold{fold_no}_edge_mAR'
+
+
+    # topo_array=np.array(topo_results)
+    # print(f'topo mean: {topo_array.mean(0)}')
+    # print(f'topo std: {topo_array.std(0)}')
+    # # Determine smd
+    # smd_mean = torch.tensor(smd_results).mean().item()
+    # smd_std = torch.tensor(smd_results).std().item()
+    # print(f'smd value: mean {smd_mean}, std {smd_std}\n')
+
+    # # Determine node box ap / ar
+    # node_metric_scores = metric_node_map.eval()
+    # edge_metric_scores = metric_edge_map.eval()
+
+
+    # print("Node scores")
+    # print(json.dumps(node_metric_scores, sort_keys=True, indent=4))
+    # print("####################################################################################")
+    # print("Edge scores")
+    # print(json.dumps(edge_metric_scores, sort_keys=True, indent=4))
+
+    # b0, b1 = np.mean(beta_errors, axis=0)
+    # b0_std, b1_std = np.std(beta_errors, axis=0)
+
+    # print("Betti-error:", b0, b1)
+    # print("Betti-error std:", b0_std, b1_std)
+
+    # csv_value_string = f'{smd_mean};{smd_std}'
+    # csv_header_string = f'smd;smd-(std)'
+
+    # csv_value_string += f';{topo_array.mean(0)[0]};{topo_array.std(0)[0]};{topo_array.mean(0)[1]};{topo_array.std(0)[1]}'
+    # csv_header_string += f';topo-prec;topo-pred-(std);topo-rec;topo-rec-(std)'
+
+    # csv_value_string += f';{b0};{b0_std};{b1};{b1_std}'
+    # csv_header_string += f';b0;b0-(std);b1;b1-(std)'
+
+    # for field in node_metric_scores:
+    #     csv_header_string += f';node_{field};node_{field}-(std)'
+    #     csv_value_string += f';{node_metric_scores[field][0]};{node_metric_scores[field][1]}'
+
+    # for field in edge_metric_scores:
+    #     csv_header_string += f';edge_{field};edge_{field}-(std)'
+    #     csv_value_string += f';{edge_metric_scores[field][0]};{edge_metric_scores[field][1]}'
 
     print(csv_header_string)
     print(csv_value_string)
