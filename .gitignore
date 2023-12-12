@@ -3,6 +3,7 @@
 /models/ops/build
 /models/ops/dist
 /models/ops/MultiScaleDeformableAttention3D.egg-info
+/models/ops/MultiScaleDeformableAttention2D.egg-info
 /models/models2D
 __pycache__
 /env
