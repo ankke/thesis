@@ -11,8 +11,7 @@ import numpy as np
 from ignite.exceptions import NotComputableError
 import torch
 
-from fitsne import FItSNE
-
+from sklearn.manifold import TSNE
 
 def gram_linear(x):
   """Compute Gram (kernel) matrix for a linear kernel.
@@ -182,8 +181,8 @@ def dim_reduction(X,Y):
   """
   Reduces the dimensionality of X and Y to 2 using the t-SNE algorithm.
   """
-  tsne_X = FItSNE(X)
-  tsne_Y = FItSNE(Y)
+  tsne_X = TSNE().fit_transform(X)
+  tsne_Y = TSNE().fit_transform(Y)
   return tsne_X, tsne_Y
 
 class SimilarityMetricTSNE(Metric):
@@ -357,8 +356,8 @@ def create_feature_representation_visual(similarity_measure):
   Creates a visual of the feature representation of the source and target domain using t-SNE.
   """
   X, Y = similarity_measure.get_features()
-  X = FItSNE(np.ascontiguousarray(X.astype(np.double)))
-  Y = FItSNE(np.ascontiguousarray(Y.astype(np.double)))
+  X = TSNE().fit_transform(np.ascontiguousarray(X.astype(np.double)))
+  Y = TSNE().fit_transform(np.ascontiguousarray(Y.astype(np.double)))
 
   # Plot X and Y in different colors on a single plot and return the image for the tensorboard handler
   fig, ax = plt.subplots()

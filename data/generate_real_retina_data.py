@@ -170,11 +170,8 @@ parser.add_argument('--seed',
 
 image_id = 1
 
-def generate_data(args):
+def generate_data(root_dir, target_dir, seed, split):
     global image_id
-
-    root_dir = args.source
-    target_dir = args.target
 
     img_dir = os.path.join(root_dir, 'img')
     seg_dir = os.path.join(root_dir, 'seg')
@@ -197,9 +194,9 @@ def generate_data(args):
                 edges_files.append(os.path.join(graph_dir, f'{file_id}_edges.csv'))
 
     # Sets the seed for reproducibility
-    random.seed(args.seed)
+    random.seed(seed)
 
-    split = round(args.split * len(raw_files))
+    split = round(split * len(raw_files))
 
     train_path = f"{target_dir}/train_data/"
     if not os.path.isdir(train_path):
@@ -216,7 +213,7 @@ def generate_data(args):
         seg_image = np.array(Image.open(seg_file))
         graph = create_graph(nodes_file, edges_file)
 
-        nodes = np.array([pos for node_id, pos in graph.nodes(data="pos")])
+        nodes = np.array([pos for _, pos in graph.nodes(data="pos")])
         nodes[:, 2] = 0
 
         edges = np.array(graph.edges, dtype=np.int32)
@@ -261,4 +258,4 @@ def generate_data(args):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    generate_data(args)
+    generate_data(args.root_dir, args.target_dir, args.seed, args.split)

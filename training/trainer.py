@@ -7,9 +7,11 @@ import torch
 import gc
 import numpy as np
 
-from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, downsample_examples, upsample_examples
-from metrics.svcca import get_cca_similarity, robust_cca_similarity
+# from metrics.similarity import SimilarityMetricPCA, SimilarityMetricTSNE, batch_cka, batch_cosine, batch_euclidean, downsample_examples, upsample_examples
+# from metrics.svcca import get_cca_similarity, robust_cca_similarity
 
+torch.backends.cudnn.enabled = True 
+torch.backends.cudnn.benchmark = True
 
 # define customized trainer
 class RelationformerTrainer(SupervisedTrainer):
@@ -176,33 +178,27 @@ def build_trainer(train_loader, net, seg_net, loss, optimizer, scheduler, writer
             epoch_interval=1
         ),
     ]
-    # train_post_transform = Compose(
-    #     [AsDiscreted(keys=("pred", "label"),
-    #     argmax=(True, False),
-    #     to_onehot=True,
-    #     n_classes=N_CLASS)]
-    # )
 
     loss.to(device)
 
-    if config.DATA.MIXED:
-        # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
-        base_metric = SimilarityMetricPCA(
-            output_transform=lambda x: (x["src"], x["domains"]), 
-            similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
-            base_metric=None
-        )
-        key_train_metric = {"train_cca_similarity": base_metric}
-        additional_metrics = {
-            "train_cka_similarity": SimilarityMetricPCA(
-                output_transform=lambda x: (x["src"], x["domains"]), 
-                similarity_function=batch_cka,
-                base_metric=base_metric
-            ),
-        }
-    else:
-        key_train_metric=None
-        additional_metrics=None
+    # if config.DATA.MIXED:
+    #     # One metric is used for collecting the samples and performing tSNE so that other similarity metrics don't have to compute it by themselves
+    #     # base_metric = SimilarityMetricPCA(
+    #     #     output_transform=lambda x: (x["src"], x["domains"]), 
+    #     #     similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
+    #     #     base_metric=None
+    #     # )
+    #     # key_train_metric = {"train_cca_similarity": base_metric}
+    #     # additional_metrics = {
+    #     #     "train_cka_similarity": SimilarityMetricPCA(
+    #     #         output_transform=lambda x: (x["src"], x["domains"]), 
+    #     #         similarity_function=batch_cka,
+    #     #         base_metric=base_metric
+    #     #     ),
+    #     # }
+    # else:
+    key_train_metric=None
+    additional_metrics=None
 
     trainer = RelationformerTrainer(
         device=device,

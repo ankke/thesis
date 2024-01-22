@@ -73,6 +73,48 @@ class Vessel2GraphDataLoader(Dataset):
 
         return image_data-0.5, seg_data-0.5, nodes, edges, self.domain_classification
 
+class Vessel2GraphOnlyDataLoader(Dataset):
+    """[summary]
+
+    Args:
+        Dataset ([type]): [description]
+    """
+
+    def __init__(self, data):
+        """[summary]
+
+        Args:
+            data ([type]): [description]
+            augment ([type]): [description]
+        """
+        self.data = data
+
+    def __len__(self):
+        """[summary]
+
+        Returns:
+            [type]: [description]
+        """
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        """[summary]
+
+        Args:
+            idx ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        data = self.data[idx]
+        nodes = pd.read_csv(data['nodes'], sep=";", index_col="id")
+        edges = pd.read_csv(data['edges'], sep=";", index_col="id")
+        
+        nodes = torch.tensor(nodes.to_numpy()[:, :2].astype(np.float32) / 128.)
+        edges = torch.tensor(edges.to_numpy()[:, :2].astype(int))
+
+        return nodes, edges
+
 
 def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples=0, use_grayscale=False, domain_classification=-1):
     """[summary]

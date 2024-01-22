@@ -20,6 +20,8 @@ from models.matcher import build_matcher
 from training.losses import SetCriterion
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 
+torch.cuda.empty_cache()
+
 parser = ArgumentParser()
 parser.add_argument('--config',
                     default=None,
@@ -241,6 +243,7 @@ def main(args):
     pbar.attach(trainer, output_transform=lambda x: {
                 'loss': x["loss"]["total"].item()})
     # logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    print(torch.cuda.is_available(), torch.backends.cudnn.is_available())
     trainer.run()
 
 

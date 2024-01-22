@@ -1,8 +1,22 @@
+import os
+
 import networkx as nx
 import matplotlib.pyplot as plt
+from data.dataset_real_eye_vessels import Vessel2GraphDataLoader
 import numpy as np
+import pandas as pd
 from torchvision.transforms import Compose, Normalize
-from fitsne import FItSNE
+import os
+import numpy as np
+import random
+import torch
+import pyvista
+from torch.utils.data import Dataset
+from PIL import Image
+import torchvision.transforms.functional as tvf
+import pandas as pd
+from utils.utils import rotate_coordinates
+from torchvision.transforms.functional import rotate
 
 
 def draw_graph(nodes, edges, ax):
@@ -39,15 +53,31 @@ def create_sample_visual(samples, number_samples=10):
     return  res 
 
 
+def create_sample_visual_from_data_loader(data_loader, samples_no=10, augment=False):
+    data_loader.augment = augment
+    
+    fig, axs = plt.subplots(samples_no, 3)
+    fig.set_size_inches(20,6 * samples_no)
+
+    for i in range(samples_no):
+        image, seg, nodes, edges, _ = data_loader[i]
+        image, seg, nodes, edges = image.clone().cpu().detach(), seg.clone().cpu().detach(), nodes.clone().cpu().detach(), edges.clone().cpu().detach()
+        axs[i, 0].imshow(inv_norm(image).permute(1, 2, 0))
+        seg = torch.reshape(seg, (128,128))
+        axs[i, 1].imshow(seg, cmap='gray' )
+        draw_graph(nodes, edges, axs[i, 2])
+
+    fig.canvas.draw()
+    return fig 
+
 inv_norm = Compose([
     Normalize(
-        mean=[0., 0., 0.],
+        mean=[0, 0, 0],
         std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
     ),
     Normalize(
         mean=[-0.485, -0.456, -0.406],
-        std=[1., 1., 1.]
+        std=[1, 1, 1]
     ),
 ])
-
 
