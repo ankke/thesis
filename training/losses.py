@@ -1,10 +1,17 @@
+import enum
 import torch
 import torch.nn.functional as F
 from torch import nn
 import pdb
 from utils import box_ops_2D
 import numpy as np
-from utils.utils import upsample_edges
+from utils.utils import downsample_edges, upsample_edges
+
+class EDGE_SAMPLING_MODE(enum.Enum):
+    NONE = "none"
+    UP = "up"
+    DOWN = "down"
+
 
 def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):
     """
@@ -58,7 +65,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net, num_edge_samples=80, edge_upsampling=False, domain_class_weight=None):
+    def __init__(self, config, matcher, net, num_edge_samples=80, edge_sampling_mode=EDGE_SAMPLING_MODE.NONE, domain_class_weight=None):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -74,7 +81,7 @@ class SetCriterion(nn.Module):
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
         self.num_edge_samples = num_edge_samples
-        self.edge_upsampling = edge_upsampling
+        self.edge_sampling_mode = edge_sampling_mode
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         if config.DATA.MIXED:
@@ -217,7 +224,7 @@ class SetCriterion(nn.Module):
             pos_edge[shuffle,:] = to_shuffle[:,[1, 0]]
 
             # restrict unbalance in the +ve/-ve edge
-            if pos_edge.shape[0]>40:
+            if self.edge_sampling_mode == EDGE_SAMPLING_MODE.NONE and pos_edge.shape[0]>40:
                 # print('Reshaping')
                 pos_edge = pos_edge[:40,:]
 
@@ -261,9 +268,13 @@ class SetCriterion(nn.Module):
         # valid_edges = torch.argmax(relation_pred, -1)
         # print('valid_edge number', valid_edges.sum())
 
-        if self.edge_upsampling:
+        if self.edge_sampling_mode == EDGE_SAMPLING_MODE.UP:
             relation_pred, edge_labels = \
                 upsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
+        elif self.edge_sampling_mode == EDGE_SAMPLING_MODE.DOWN:
+            relation_pred, edge_labels = \
+                downsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
+
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 

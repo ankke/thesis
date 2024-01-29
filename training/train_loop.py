@@ -13,6 +13,8 @@ def train(train_loader, model, optimizer, loss_function, epoch, device, config, 
 
     # One epoch
     for iteration, (images, segs, nodes, edges, domains) in enumerate(tqdm(train_loader, leave=False, desc="Training loop")):
+        optimizer.zero_grad()
+
         images = images.to(device,  non_blocking=False)
         nodes = [node.to(device,  non_blocking=False) for node in nodes]
         edges = [edge.to(device,  non_blocking=False) for edge in edges]
@@ -39,15 +41,16 @@ def train(train_loader, model, optimizer, loss_function, epoch, device, config, 
             similarity_metric.update(srcs[-1], domains)
 
         # Log to wandb
-        wandb_run.log({"train": {
-            "node_loss": losses["nodes"],
-            "edge_loss": losses["edges"],
-            "box_loss": losses["boxes"],
-            "domain_loss": losses["domain"],
-            "total_loss": losses["total"],
-            "alpha": alpha,
-            "step": num_iterations*epoch + iteration,
-        }})
+        if wandb_run is not None:
+            wandb_run.log({"train": {
+                "node_loss": losses["nodes"],
+                "edge_loss": losses["edges"],
+                "box_loss": losses["boxes"],
+                "domain_loss": losses["domain"],
+                "total_loss": losses["total"],
+                "alpha": alpha,
+                "step": num_iterations*epoch + iteration,
+            }})
 
         # Cleanup
         del images

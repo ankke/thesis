@@ -106,10 +106,15 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
         data_dicts = [
             {"img": img_file, "vtp": vtk_file} for img_file, vtk_file in zip(img_files, vtk_files)
         ]
+
+        if max_samples > 0:
+            data_dicts = data_dicts[:max_samples]
+
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             augment=True,
-            max_nodes=config.MODEL.DECODER.OBJ_TOKEN
+            max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
+            domain_classification=domain_classification,
         )
         return ds
     elif mode == 'test':
@@ -172,4 +177,4 @@ def build_synthetic_vessel_network_data(config, mode='train', split=0.95, max_sa
             max_nodes=config.MODEL.DECODER.OBJ_TOKEN,
             domain_classification=domain_classification,
         )
-        return train_ds, val_ds, None
+        return train_ds, val_ds

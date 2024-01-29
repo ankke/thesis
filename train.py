@@ -17,9 +17,10 @@ from models import build_model
 from training.validation_loop import validate
 from utils.utils import image_graph_collate_road_network
 from models.matcher import build_matcher
-from training.losses import SetCriterion
+from training.losses import EDGE_SAMPLING_MODE, SetCriterion
 from tqdm import tqdm
 import wandb
+from sklearn.model_selection import KFold
 
 parser = ArgumentParser()
 parser.add_argument('--config',
@@ -42,6 +43,7 @@ parser.add_argument('--sspt', default=False, action="store_true",
                     help="Whether the model was pretrained with self supervised pretraining. If true, the checkpoint will be loaded accordingly. Only combine with resume.")
 parser.add_argument('--disable_wandb', default=False, action='store_true',
                     help='disable wandb logging')
+parser.add_argument('--folds', default=1, help='Number of folds for cross-validation')
 
 
 class obj:
@@ -85,182 +87,235 @@ def main(args):
 
     # Determine dataset type
     if config.DATA.DATASET == 'road_dataset':
-        build_dataset_function = build_road_network_data
+        build_dataset_function = partial(build_road_network_data, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
         config.DATA.MIXED = False
     elif config.DATA.DATASET == 'synthetic_eye_vessel_dataset':
-        build_dataset_function = build_synthetic_vessel_network_data
+        build_dataset_function = partial(build_synthetic_vessel_network_data, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
         config.DATA.MIXED = False
     elif config.DATA.DATASET == 'real_eye_vessel_dataset':
-        build_dataset_function = build_real_vessel_network_data
+        build_dataset_function = partial(build_real_vessel_network_data, max_samples=config.DATA.NUM_SOURCE_SAMPLES)
         config.DATA.MIXED = False
     elif config.DATA.DATASET == 'mixed_road_dataset' or config.DATA.DATASET == 'mixed_synthetic_eye_vessel_dataset' or config.DATA.DATASET == "mixed_real_eye_vessel_dataset":
-        build_dataset_function = partial(build_mixed_data, upsample_target_domain=config.TRAIN.UPSAMPLE_TARGET_DOMAIN)
+        build_dataset_function = partial(build_mixed_data, mode="train")
         config.DATA.MIXED = True
+    else:
+        raise ValueError("Invalid dataset")
 
     # Create dataset
-    train_ds, val_ds, sampler = build_dataset_function(
-        config, mode='split', use_grayscale=args.pretrain_seg, max_samples=config.DATA.NUM_SOURCE_SAMPLES, split=0.8
+    train_ds = build_dataset_function(
+        config, mode='train', use_grayscale=args.pretrain_seg
     )
 
-    # Create dataloader
-    train_loader = DataLoader(train_ds,
-                              batch_size=config.DATA.BATCH_SIZE,
-                              shuffle=not sampler,
-                              num_workers=config.DATA.NUM_WORKERS,
-                              collate_fn=image_graph_collate_road_network,
-                              pin_memory=True,
-                              sampler=sampler)
-    val_loader = DataLoader(val_ds,
-                            batch_size=config.DATA.BATCH_SIZE,
-                            shuffle=False,
-                            num_workers=config.DATA.NUM_WORKERS,
-                            collate_fn=image_graph_collate_road_network,
-                            pin_memory=True)
-
-    # Create model, and loss, and utilities
-    model = build_model(config).to(device)
-    matcher = build_matcher(config)
-    loss = SetCriterion(
-        config,
-        matcher,
-        model,
-        num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
-        edge_upsampling=config.TRAIN.EDGE_UPSAMPLING,
-        domain_class_weight=torch.tensor(config.TRAIN.DOMAIN_WEIGHTING, device=device)
-    )
-
-    # Create validation loss criterion
-    val_loss = SetCriterion(config, matcher, model, num_edge_samples=9999, edge_upsampling=False)
-
-    # Set learning rates according to config for different parts of the network
-    param_dicts = [
-        {
-            "params":
-                [p for n, p in model.named_parameters()
-                 if not match_name_keywords(n, ["encoder.0"]) and not match_name_keywords(n, ['reference_points', 'sampling_offsets']) and not match_name_keywords(n, ["domain_discriminator"]) and p.requires_grad],
-            "lr": float(config.TRAIN.LR),
-            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
-        },
-        {
-            "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ["encoder.0"]) and p.requires_grad],
-            "lr": float(config.TRAIN.LR_BACKBONE),
-            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
-        },
-        {
-            "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
-            "lr": float(config.TRAIN.LR)*0.1,
-            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
-        },
-        {
-            "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ['domain_discriminator']) and p.requires_grad],
-            "lr": float(config.TRAIN.LR_DOMAIN),
-            "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
-        }
-    ]
-
-    # Create optmizer
-    optimizer = torch.optim.AdamW(
-        param_dicts, lr=float(config.TRAIN.LR), weight_decay=float(config.TRAIN.WEIGHT_DECAY)
-    )
-
-    # Print learning rates for debugging 
-    for param_group in optimizer.param_groups:
-        print(f'lr: {param_group["lr"]}, number of params: {len(param_group["params"])}')
-
-    # Create Learning rate schedule
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, config.TRAIN.LR_DROP)
-
-    # Load existing model
-    last_epoch = 0
-    if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cpu')
-
-        if args.sspt:
-            checkpoint['state_dict'] = {k[17:]: v for k, v in checkpoint['state_dict'].items() if k.startswith("momentum_encoder")}
-            model.load_state_dict(checkpoint['state_dict'], strict=True)
-        else:
-            model.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
-            if args.recover_optim:
-                optimizer.load_state_dict(checkpoint['optimizer'])
-            if args.restore_state:
-                scheduler.load_state_dict(checkpoint['scheduler'])
-                last_epoch = scheduler.last_epoch
-                scheduler.step_size = config.TRAIN.LR_DROP
-
-
-    # Create wandb run
-    if not args.disable_wandb:
-        # start a new wandb run to track this script
-        wandb_run = wandb.init(
-            # set the wandb project where this run will be logged
-            project="relationformer",
-            
-            # track hyperparameters and run metadata
-            config={
-                "learning_rate": float(config.TRAIN.LR),
-                "epochs": config.TRAIN.EPOCHS,
-                "batch_size": config.DATA.BATCH_SIZE,
-                "dataset": config.DATA.DATASET,
-                "exp_name": args.exp_name,
-            }
-        )
-
-    # Setup similarity metrics
-    if config.DATA.MIXED:
-        cca_similarity_metric = SimilarityMetricPCA( 
-            similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
-            base_metric=None
-        )
-        cka_similarity_metric = SimilarityMetricPCA(
-            similarity_function=batch_cka,
-            base_metric=cca_similarity_metric
-        )
+    # Initialize the k-fold cross validation
+    folds = int(args.folds)
+    if folds > 1:
+        kf = KFold(n_splits=folds, shuffle=True, random_state=config.DATA.SEED)
+        iterator = kf.split(train_ds)
+        max_edge_maps = torch.zeros(size=[folds], dtype=torch.float)
     else:
-        cca_similarity_metric = None
-        cka_similarity_metric = None
+        ds_range = torch.randperm(len(train_ds))
+        # Randomly select 80% of the ids in ds_range for training and the rest for validation
+        train_idx = ds_range[:int(0.8*len(train_ds))]
+        val_idx = ds_range[int(0.8*len(train_ds)):]
 
-    for epoch in tqdm(range(last_epoch, config.TRAIN.EPOCHS), desc="Epochs"):
-        # Run epoch
-        train(train_loader, model, optimizer, loss, epoch, device, config, wandb_run, cca_similarity_metric)
+        iterator = [(train_idx, val_idx)]
 
-        # Compute Training Similarity Metrics
-        if config.DATA.MIXED:
-            train_cca_similarity = cca_similarity_metric.compute()
-            train_cka_similarity = cka_similarity_metric.compute()
+    for fold, (train_idx, val_idx) in enumerate(iterator):
+        # Create dataloader
+        train_loader = DataLoader(train_ds,
+                                batch_size=config.DATA.BATCH_SIZE,
+                                num_workers=config.DATA.NUM_WORKERS,
+                                shuffle=False,
+                                collate_fn=image_graph_collate_road_network,
+                                pin_memory=True,
+                                sampler=torch.utils.data.SubsetRandomSampler(train_idx)
+        )
 
-        # Run validation
-        validation_losses, sample_visuals = validate(val_loader, model, val_loss, epoch, device, config, wandb_run, cca_similarity_metric)
+        val_loader = DataLoader(train_ds,
+                                batch_size=config.DATA.BATCH_SIZE,
+                                shuffle=False,
+                                num_workers=config.DATA.NUM_WORKERS,
+                                collate_fn=image_graph_collate_road_network,
+                                pin_memory=True,
+                                sampler=torch.utils.data.SubsetRandomSampler(val_idx)
+        )
 
-        # Compute Training Similarity Metrics
-        if config.DATA.MIXED:
-            val_cca_similarity = cca_similarity_metric.compute()
-            val_cka_similarity = cka_similarity_metric.compute()
+        print("Training on %d samples, validating on %d samples" % (len(train_idx), len(val_idx)))
 
-        # Log whole-epoch validation stuff
-        wandb.log({
-            "train": {
-                "base_lr": scheduler.get_last_lr()[0],
-                "cca_similarity": train_cca_similarity,
-                "cka_similarity": train_cka_similarity,
+        # Set edge sampling mode
+        if config.TRAIN.EDGE_SAMPLING_MODE == "none":
+            edge_sampling_mode = EDGE_SAMPLING_MODE.NONE
+        elif config.TRAIN.EDGE_SAMPLING_MODE == "up":
+            edge_sampling_mode = EDGE_SAMPLING_MODE.UP
+        elif config.TRAIN.EDGE_SAMPLING_MODE == "down":
+            edge_sampling_mode = EDGE_SAMPLING_MODE.DOWN
+        else:
+            raise ValueError("Invalid edge sampling mode")
+
+        # Create model, and loss, and utilities
+        model = build_model(config).to(device)
+        matcher = build_matcher(config)
+        loss = SetCriterion(
+            config,
+            matcher,
+            model,
+            num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
+            edge_sampling_mode=edge_sampling_mode,
+            domain_class_weight=torch.tensor(config.TRAIN.DOMAIN_WEIGHTING, device=device)
+        )
+
+        # Create validation loss criterion
+        val_loss = SetCriterion(config, matcher, model, num_edge_samples=9999, edge_sampling_mode=EDGE_SAMPLING_MODE.NONE)
+
+        # Set learning rates according to config for different parts of the network
+        param_dicts = [
+            {
+                "params":
+                    [p for n, p in model.named_parameters()
+                    if not match_name_keywords(n, ["encoder.0"]) and not match_name_keywords(n, ['reference_points', 'sampling_offsets']) and not match_name_keywords(n, ["domain_discriminator"]) and p.requires_grad],
+                "lr": float(config.TRAIN.LR),
+                "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
             },
-            "validation": {
-                "val_cca_similarity": val_cca_similarity,
-                "val_cka_similarity": val_cka_similarity,
-                "node_loss": validation_losses["nodes"],
-                "edge_loss": validation_losses["edges"],
-                "box_loss": validation_losses["boxes"],
-                "domain_loss": validation_losses["domain"],
-                "total_loss": validation_losses["total"],
-                "sample_visuals": wandb.Image(sample_visuals),
+            {
+                "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ["encoder.0"]) and p.requires_grad],
+                "lr": float(config.TRAIN.LR_BACKBONE),
+                "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
             },
-            "epoch": epoch
-        })
+            {
+                "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ['reference_points', 'sampling_offsets']) and p.requires_grad],
+                "lr": float(config.TRAIN.LR)*0.1,
+                "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
+            },
+            {
+                "params": [p for n, p in model.named_parameters() if match_name_keywords(n, ['domain_discriminator']) and p.requires_grad],
+                "lr": float(config.TRAIN.LR_DOMAIN),
+                "weight_decay": float(config.TRAIN.WEIGHT_DECAY)
+            }
+        ]
 
-        # Save checkpoint
+        # Create optmizer
+        optimizer = torch.optim.AdamW(
+            param_dicts, lr=float(config.TRAIN.LR), weight_decay=float(config.TRAIN.WEIGHT_DECAY)
+        )
 
-        # Do scheduler step
-        scheduler.step()
+        # Print learning rates for debugging 
+        for param_group in optimizer.param_groups:
+            print(f'lr: {param_group["lr"]}, number of params: {len(param_group["params"])}')
+
+        # Create Learning rate schedule
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, config.TRAIN.LR_DROP)
+
+        # Load existing model
+        last_epoch = 0
+        if args.resume:
+            checkpoint = torch.load(args.resume, map_location='cpu')
+
+            if args.sspt:
+                checkpoint['state_dict'] = {k[17:]: v for k, v in checkpoint['state_dict'].items() if k.startswith("momentum_encoder")}
+                model.load_state_dict(checkpoint['state_dict'], strict=True)
+            else:
+                model.load_state_dict(checkpoint['net'], strict=not args.no_strict_loading)
+                if args.recover_optim:
+                    optimizer.load_state_dict(checkpoint['optimizer'])
+                if args.restore_state:
+                    scheduler.load_state_dict(checkpoint['scheduler'])
+                    last_epoch = scheduler.last_epoch
+                    scheduler.step_size = config.TRAIN.LR_DROP
+
+
+        # Create wandb run
+        if not args.disable_wandb:
+            # start a new wandb run to track this script
+            wandb_run = wandb.init(
+                # set the wandb project where this run will be logged
+                project="relationformer",
+                
+                # track hyperparameters and run metadata
+                config={
+                    "learning_rate": float(config.TRAIN.LR),
+                    "epochs": config.TRAIN.EPOCHS,
+                    "batch_size": config.DATA.BATCH_SIZE,
+                    "dataset": config.DATA.DATASET,
+                    "exp_name": args.exp_name,
+                    "fold": fold,
+                }
+            )
+        else:
+            wandb_run = None
+
+        # Setup similarity metrics
+        if config.DATA.MIXED:
+            cca_similarity_metric = SimilarityMetricPCA( 
+                similarity_function=lambda X, Y: robust_cca_similarity(X,Y, threshold=0.98, compute_dirns=False, verbose=False, epsilon=1e-8)["mean"][0],
+                base_metric=None
+            )
+            cka_similarity_metric = SimilarityMetricPCA(
+                similarity_function=batch_cka,
+                base_metric=cca_similarity_metric
+            )
+        else:
+            cca_similarity_metric = None
+            cka_similarity_metric = None
+
+        for epoch in tqdm(range(last_epoch, config.TRAIN.EPOCHS), desc="Epochs"):
+            # Run epoch
+            train(train_loader, model, optimizer, loss, epoch, device, config, wandb_run, cca_similarity_metric)
+
+            logging = {
+                "train": {
+                    "base_lr": scheduler.get_last_lr()[0],
+                },
+                "validation": {},
+                "epoch": epoch
+            }
+
+            if epoch % config.TRAIN.VAL_INTERVAL == 0:
+
+                # Compute Training Similarity Metrics
+                if config.DATA.MIXED:
+                    logging["train"]["train_cca_similarity"] = cca_similarity_metric.compute()
+                    logging["train"]["train_cka_similarity"] = cka_similarity_metric.compute()
+
+                # Run validation
+                validation_results, sample_visuals = validate(val_loader, model, val_loss, epoch, device, config, wandb_run, cca_similarity_metric)
+
+                # Update best edge mAP
+                if folds > 1 and validation_results["edge_mAP"] > max_edge_maps[fold]:
+                    max_edge_maps[fold] = validation_results["edge_mAP"]
+
+                # Compute Training Similarity Metrics
+                if config.DATA.MIXED:
+                    logging["validation"]["val_cca_similarity"] = cca_similarity_metric.compute()
+                    logging["validation"]["val_cka_similarity"] = cka_similarity_metric.compute()
+
+                logging["validation"].update(validation_results)
+                logging["validation"]["sample_visuals"] = wandb.Image(sample_visuals)
+
+                # Log whole-epoch validation stuff
+                if wandb_run is not None:
+                    wandb.log(logging)
+
+                # Save checkpoint
+                checkpoint = {
+                    'net': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'scheduler': scheduler.state_dict(),
+                    'epoch': epoch,
+                }
+                torch.save(checkpoint, os.path.join(exp_path, "checkpoint_%d.pth" % epoch))
+
+            # Do scheduler step
+            scheduler.step()
+
+        if not args.disable_wandb:
+            wandb.finish()
+
+    # Print best and average edge mAP and std
+    if folds > 1:
+        print("Best edge mAP: %f" % max_edge_maps.max())
+        print("Average edge mAP: %f" % max_edge_maps.mean())
+        print("Edge mAP std: %f" % max_edge_maps.std())
 
 
 def match_name_keywords(n, name_keywords):

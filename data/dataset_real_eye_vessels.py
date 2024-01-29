@@ -106,9 +106,14 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
             {"img": img_file, "seg": seg_file, "nodes": node_file, "edges": edge_file} for
             img_file, seg_file, node_file, edge_file in zip(img_files, seg_files, node_files, edge_files)
         ]
+
+        if max_samples > 0:
+            data_dicts = data_dicts[:max_samples]
+
         ds = Vessel2GraphDataLoader(
             data=data_dicts,
             augment=True,
+            domain_classification=domain_classification,
         )
         return ds
     elif mode == 'test':
@@ -182,4 +187,4 @@ def build_real_vessel_network_data(config, mode='train', split=0.95, max_samples
             augment=False,
             domain_classification=domain_classification,
         )
-        return train_ds, val_ds, None
+        return train_ds, val_ds
