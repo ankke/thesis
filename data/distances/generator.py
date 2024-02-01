@@ -12,8 +12,9 @@ RESULTS_DIR = '/media/data/anna_alex/distances/results'
 
 
 def generate_random_pairs(method, dataset, num_pairs=100, **kwargs):
-    data_loader = DataLoader(dataset, batch_size=2, shuffle=True)
-    graph_pairs = [next(iter(data_loader)) for _ in range(num_pairs)]
+    # data_loader = DataLoader(dataset, batch_size=2, shuffle=False)
+    # graph_pairs = [next(iter(data_loader)) for _ in range(num_pairs)]
+    graph_pairs = [(dataset[i], dataset[i+1]) for i in range(0, num_pairs, 2)]
 
     dir = osp.join(RESULTS_DIR, 'random_pairs', method)
     

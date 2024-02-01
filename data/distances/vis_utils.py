@@ -52,6 +52,8 @@ def plot_res(results, method):
         ax2.title.set_text(f"N: {res['num_nodes_graph2']}, E: {res['num_edges_graph2']}, C: {res['conn_comp_graph2']}")
         
         subfigs[i].suptitle(f"{method}: {distance}", fontsize=12)
+        # tmp
+        # subfigs[i].suptitle(f"{method}: {distance}, pyged: {res['pyged']}", fontsize=12)
 
 
 def plot_corr_heatmat(df, method='ged'):
