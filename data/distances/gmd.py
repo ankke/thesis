@@ -11,6 +11,7 @@ from torch_geometric.utils import to_networkx
 from multiprocessing import Pool
 import networkx as nx
 import torch
+import traceback
 
 from time import time
 from multiprocessing import Pool, cpu_count
@@ -79,8 +80,9 @@ def _compute_gmd(args):
         cost  = cost / (M * M)
 
         return {'pair': data_pair, 'gmd': cost, 'gmd_flow': flow}
-    except:
-        pass
+    except Exception as e:
+        print(e)
+        print(traceback.print_exc())
 
 
 def _gmd(graph_pairs, C_V, C_E, M):
@@ -149,7 +151,7 @@ def vis_mapping(G1, G2, flow, shift, ax=None):
     G1 = nx.relabel_nodes(G1, mapping)
     mapping = {node: 'g2.' + str(node) for node in G2.nodes}
     G2 = nx.relabel_nodes(G2, mapping)
-    
+
     for u in flow.values():
         for v, w in u.items():
             u[v] = { 'weight': w } 

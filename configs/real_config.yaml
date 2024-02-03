@@ -4,10 +4,9 @@ DATA:
   TEST_BATCH_SIZE: 128 #16
   DATA_PATH: "/media/data/alex_johannes/data/OCTA-500_6mm/train_data"
   SOURCE_DATA_PATH: "/media/data/alex_johannes/data/OCTA-500_6mm/train_data" # Path to dataset, could be overwritten by command line argument
-  NUM_SOURCE_SAMPLES: 2000
-  NUM_TARGET_SAMPLES: 2000
+  NUM_SOURCE_SAMPLES: 3000
+  NUM_TARGET_SAMPLES: 3000
   TARGET_DATA_PATH: "/media/data/alex_johannes/data/OCTA-500_6mm/train_data"
-  DOMAIN_WEIGHTING: [0.5, 0.5]
   #TEST_DATA_PATH: "/home/iterm/johannes.paetzold/data/synthetic_eye_vessels_small/test_data"
   TEST_DATA_PATH: "/media/data/alex_johannes/data/OCTA-500_6mm/test_data"
   DATASET: "real_eye_vessel_dataset" # Dataset name
@@ -83,6 +82,7 @@ TRAIN:
   VAL_INTERVAL: 10 # validation interval
   SAVE_VAL: False # save validation data
   RECOVER_OPTIMIZER_STATE: False
+  DOMAIN_WEIGHTING: [0.5, 0.5]
 
   # loss weight
   LOSSES: ["boxes", "class", "cards", "nodes", "edges", "domain"]

@@ -13,3 +13,4 @@ __pycache__
 cuda-repo-ubuntu1804-10-2-local-10.2.89-440.33.01_1.0-1_amd64.deb
 cuda-repo-ubuntu2004-12-3-local_12.3.1-545.23.08-1_amd64.deb
 /data/distances/results
+/pyged
