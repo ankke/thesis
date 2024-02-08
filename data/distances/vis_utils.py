@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import networkx as nx
+import plotly.express as px
 
 from torch_geometric.utils import to_networkx
 from tqdm import tqdm
@@ -51,7 +52,7 @@ def plot_res(results, method):
         draw_graph(g2.pos, g2.edge_index.t(), ax2)
         ax2.title.set_text(f"N: {res['num_nodes_graph2']}, E: {res['num_edges_graph2']}, C: {res['conn_comp_graph2']}")
         
-        subfigs[i].suptitle(f"{method}: {distance}", fontsize=12)
+        subfigs[i].suptitle(f"{method}: {distance}, dataset: {res['dataset']}", fontsize=12)
         # tmp
         # subfigs[i].suptitle(f"{method}: {distance}, pyged: {res['pyged']}", fontsize=12)
 
@@ -65,6 +66,11 @@ def plot_corr_heatmat(df, method='ged'):
     plt.figure(figsize=(1, 5))
     sns.heatmap(ged_correlations.to_frame(), annot=True, cmap='coolwarm', fmt=".2f", cbar=False)
     plt.show()
+
+
+def plot_hist(df, x="ged", nbins=100):
+    fig = px.histogram(df, x=x, nbins=nbins)
+    fig.show()
 
 
 def plot_components(g, ax):
