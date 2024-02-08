@@ -3,12 +3,19 @@ import torch
 import gc
 import numpy as np
 from metrics.metric_map import BBoxEvaluator
+from torch_geometric.data import Data
 
 from training.inference import relation_infer
 from utils.utils import ensure_format
 from utils.visualize_sample import create_sample_visual
+from greed.models import NormGEDModel
+
+
 
 def validate(train_loader, model, loss_function, epoch, device, config, wandb_run, similarity_metric):
+    ged_model = NormGEDModel(8, 1, 64, 64).to(device)
+    ged_model.load_state_dict(torch.load('/home/anna_alex/greed/runlogs/OCTA/1707343788.9150653/best_model.pt'))
+
     model.eval()
     num_iterations = len(train_loader)
 
@@ -18,6 +25,8 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
         "box_loss": 0,
         "domain_loss": 0,
         "total_loss": 0,
+        "ged": 0,
+        "ged_node": 0,
     }
 
     # Reset similarity metric
@@ -87,6 +96,35 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
             gt_boxes=gt_edges_box,
             gt_classes=[np.ones((edges_.shape[0],)) for edges_ in edges]
         )
+
+        graphs = []
+        for n, e in zip(nodes, edges):
+            nodes_ones = torch.ones(n.size(0)).view(-1, 1)
+            graph = Data(
+                    x=nodes_ones,
+                    edge_index=e.t(),
+                    pos=n,
+                )
+            graphs.append(graph)
+        
+        pred_graphs = []
+        for n, e in zip(pred_nodes, pred_edges):
+            pred_nodes = n
+            pred_edges = torch.squeeze(torch.tensor(e))
+            pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
+            if  pred_edges.size(0) == 0:
+                pred_edges = torch.empty(0, 2)
+
+            pred_graph = Data(
+                    x=pred_nodes_ones,
+                    edge_index=torch.tensor(e).t(),
+                    pos=n,
+                )
+            pred_graphs.append(pred_graph)
+
+        ged = ged_model.predict_inner(pred_graphs, graphs).tolist()
+        all_results["ged"] += np.mean(ged)
+
 
         # Cleanup
         del images
