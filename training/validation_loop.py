@@ -113,11 +113,11 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
             pred_edges = torch.squeeze(torch.tensor(e))
             pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
             if  pred_edges.size(0) == 0:
-                pred_edges = torch.empty(0, 2)
+                pred_edges = torch.empty((0, 2), dtype=torch.int64)
 
             pred_graph = Data(
                     x=pred_nodes_ones,
-                    edge_index=torch.tensor(e).t(),
+                    edge_index=pred_edges.t(),
                     pos=n,
                 )
             pred_graphs.append(pred_graph)
@@ -148,5 +148,6 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
     all_results["box_loss"] /= num_iterations
     all_results["domain_loss"] /= num_iterations
     all_results["total_loss"] /= num_iterations
+    all_results["ged"] /= num_iterations
 
     return all_results, sample_visuals
