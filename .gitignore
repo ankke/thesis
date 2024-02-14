@@ -10,3 +10,6 @@ __pycache__
 /dump/sample
 .idea
 /wandb
+.ipynb_checkpoints/
+pyged/ext/
+pyged/build/
