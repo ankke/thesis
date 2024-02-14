@@ -13,3 +13,4 @@ __pycache__
 .ipynb_checkpoints/
 pyged/ext/
 pyged/build/
+/data/distances/results
