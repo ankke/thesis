@@ -103,15 +103,17 @@ class SiameseModel(torch.nn.Module):
         hx = self.embed_model(h)
         return self.forward_emb(gx, hx)
     
-    def predict_inner(self, queries, targets, batch_size=None):          
-        print(queries, targets)
+    def predict_inner(self, queries, targets, batch_size=None, no_grad=True):          
         # try:
         self = self.to(config.device)
         if batch_size is None or len(queries) <= batch_size:
             # tqdm.write(f'direct predict inner dataset')
             g = tg.data.Batch.from_data_list(queries).to(config.device)
             h = tg.data.Batch.from_data_list(targets).to(config.device)
-            with torch.no_grad():
+            if no_grad:
+                with torch.no_grad():
+                    return self.forward(g, h)
+            else: 
                 return self.forward(g, h)
         else:
             tqdm.write(f'batch predict inner dataset')
@@ -121,7 +123,10 @@ class SiameseModel(torch.nn.Module):
             for i, (g, h) in enumerate(tqdm(loader, 'batches')):
                 g = g.to(config.device)
                 h = h.to(config.device)
-                with torch.no_grad():
+                if no_grad:
+                    with torch.no_grad():
+                        ret[i*batch_size:(i+1)*batch_size] = self.forward(g, h)
+                else:
                     ret[i*batch_size:(i+1)*batch_size] = self.forward(g, h)
         return ret
         # except Exception as e:
