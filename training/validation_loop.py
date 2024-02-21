@@ -97,59 +97,90 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
             gt_classes=[np.ones((edges_.shape[0],)) for edges_ in edges]
         )
 
-        graph_mask = []
+        # graph_mask = []
+
+        # graphs = []
+        # for i, (n, e) in enumerate(zip(nodes, edges)):
+        #     nodes_ones = torch.ones(n.size(0)).view(-1, 1)
+
+        #     if  e.shape == (2, ) or e.shape == (2, 0):
+        #         print('\n\n edge \n\n', e)
+        #         e = torch.empty((2, 1), dtype=torch.int64)
+        #         graph_mask.append(i)
+                
+        #     graph = Data(
+        #             x=nodes_ones,
+        #             edge_index=e.t(),
+        #             pos=n,
+        #         )
+        #     graphs.append(graph)
+
+        # pred_graphs = []
+        # for i, (n, e) in enumerate(zip(pred_nodes, pred_edges)):
+        #     pred_nodes = n
+        #     pred_edges = torch.squeeze(torch.tensor(e)).type(torch.int64).t()
+        #     pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
+        #     if  pred_edges.shape == (2, ) or pred_edges.shape == (2, 0):
+        #         print('\n\n pred edge \n\n', pred_edges)
+        #         pred_edges = torch.empty((2, 1), dtype=torch.int64)
+        #         graph_mask.append(i)
+                
+        #     pred_graph = Data(
+        #             x=pred_nodes_ones,
+        #             edge_index=pred_edges,
+        #             pos=n,
+        #         )
+        #     pred_graphs.append(pred_graph)
+
+        # try:
+        #     print(graph_mask)
+        #     filtered_pred_graphs = []
+        #     for i, el in enumerate(pred_graphs):
+        #         if i not in graph_mask:
+        #             filtered_pred_graphs.append(el)
+            
+        #     filtered_graphs = []
+        #     for i, el in enumerate(graphs):
+        #         if i not in graph_mask:
+        #             filtered_graphs.append(el)
+
+        #     assert len(filtered_pred_graphs) == len(filtered_graphs)
+        #     ged = ged_model.predict_inner(filtered_pred_graphs, filtered_graphs).tolist()
+        #     ged = ged_model.predict_inner(pred_graphs, graphs).tolist()
+
+
+        # except Exception as e:
+        #     # print(pred_graphs, graphs)
+        #     raise e
+        # all_results["ged"] += np.mean(ged)
+    
 
         graphs = []
-        for i, (n, e) in enumerate(zip(nodes, edges)):
+        for n, e in zip(nodes, edges):
             nodes_ones = torch.ones(n.size(0)).view(-1, 1)
-
-            if  e.shape == (2, ) or e.shape == (2, 0):
-                print('\n\n edge \n\n', e)
-                e = torch.empty((2, 1), dtype=torch.int64)
-                graph_mask.append(i)
-                
             graph = Data(
                     x=nodes_ones,
                     edge_index=e.t(),
                     pos=n,
                 )
             graphs.append(graph)
-
+        
         pred_graphs = []
-        for i, (n, e) in enumerate(zip(pred_nodes, pred_edges)):
+        for n, e in zip(pred_nodes, pred_edges):
             pred_nodes = n
-            pred_edges = torch.squeeze(torch.tensor(e)).type(torch.int64).t()
+            pred_edges = torch.squeeze(torch.tensor(e))
             pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
-            if  pred_edges.shape == (2, ) or pred_edges.shape == (2, 0):
-                print('\n\n pred edge \n\n', pred_edges)
-                pred_edges = torch.empty((2, 1), dtype=torch.int64)
-                graph_mask.append(i)
-                
+            if  pred_edges.size(0) == 0:
+                pred_edges = torch.empty((0, 2), dtype=torch.int64)
+
             pred_graph = Data(
                     x=pred_nodes_ones,
-                    edge_index=pred_edges,
+                    edge_index=pred_edges.t(),
                     pos=n,
                 )
             pred_graphs.append(pred_graph)
 
-        try:
-            filtered_pred_graphs = []
-            for i, el in enumerate(pred_graphs):
-                if i not in graph_mask:
-                    filtered_pred_graphs.append(el)
-            
-            filtered_graphs = []
-            for i, el in enumerate(graphs):
-                if i not in graph_mask:
-                    filtered_graphs.append(el)
-
-            ged = ged_model.predict_inner(filtered_pred_graphs, filtered_graphs).tolist()
-
-            
-
-        except Exception as e:
-            print(pred_graphs, graphs)
-            raise e
+        ged = ged_model.predict_inner(pred_graphs, graphs).tolist()
         all_results["ged"] += np.mean(ged)
 
 

@@ -22,6 +22,8 @@ from training.losses import EDGE_SAMPLING_MODE, SetCriterion
 from tqdm import tqdm
 import wandb
 from sklearn.model_selection import KFold
+from greed.models import NormGEDModel
+
 
 parser = ArgumentParser()
 parser.add_argument('--config',
@@ -152,6 +154,9 @@ def main(args):
             edge_sampling_mode = EDGE_SAMPLING_MODE.DOWN
         else:
             raise ValueError("Invalid edge sampling mode")
+        
+        ged_model = NormGEDModel(8, 1, 64, 64).to(device)
+        ged_model.load_state_dict(torch.load('/home/anna_alex/greed/runlogs/OCTA/1707343788.9150653/best_model.pt'))
 
         # Create model, and loss, and utilities
         model = build_model(config).to(device)
@@ -160,13 +165,14 @@ def main(args):
             config,
             matcher,
             model,
+            ged_model,
             num_edge_samples=config.TRAIN.NUM_EDGE_SAMPLES,
             edge_sampling_mode=edge_sampling_mode,
             domain_class_weight=torch.tensor(config.TRAIN.DOMAIN_WEIGHTING, device=device)
         )
 
         # Create validation loss criterion
-        val_loss = SetCriterion(config, matcher, model, num_edge_samples=9999, edge_sampling_mode=EDGE_SAMPLING_MODE.NONE)
+        val_loss = SetCriterion(config, matcher, model, ged_model, num_edge_samples=9999, edge_sampling_mode=EDGE_SAMPLING_MODE.NONE)
 
         # Set learning rates according to config for different parts of the network
         param_dicts = [

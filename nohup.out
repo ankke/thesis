@@ -33,3 +33,7 @@
 [W 04:57:39.946 NotebookApp] WebSocket ping timeout after 119964 ms.
 [I 04:57:44.950 NotebookApp] Starting buffering for d058055f-ba30-4516-8a58-4b8e4520a54a:4e5e373fcd8547c78f07c3398ab847da
 [I 11:08:25.604 NotebookApp] 302 GET /?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa (::1) 0.290000ms
+[C 16:52:43.366 NotebookApp] received signal 15, stopping
+[I 16:52:43.366 NotebookApp] Shutting down 1 kernel
+[I 16:52:43.367 NotebookApp] Kernel shutdown: d058055f-ba30-4516-8a58-4b8e4520a54a
+[I 16:52:43.479 NotebookApp] Shutting down 0 terminals

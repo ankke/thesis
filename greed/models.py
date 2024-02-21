@@ -103,7 +103,7 @@ class SiameseModel(torch.nn.Module):
         hx = self.embed_model(h)
         return self.forward_emb(gx, hx)
     
-    def predict_inner(self, queries, targets, batch_size=None, no_grad=True):          
+    def predict_inner(self, queries, targets, batch_size=None, no_grad=True):       
         # try:
         self = self.to(config.device)
         if batch_size is None or len(queries) <= batch_size:
