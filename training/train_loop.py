@@ -3,6 +3,8 @@ import torch
 import gc
 import numpy as np
 
+from training.inference import relation_infer
+
 def train(train_loader, model, optimizer, loss_function, epoch, device, config, wandb_run, similarity_metric):
     model.train()
     num_iterations = len(train_loader)
@@ -28,6 +30,12 @@ def train(train_loader, model, optimizer, loss_function, epoch, device, config, 
         # Forward pass
         h, out, srcs, pred_backbone_domains, pred_instance_domains, interpolated_domains = model(images, alpha=alpha, domain_labels=domains)
         target["interpolated_domains"] = interpolated_domains
+
+
+        pred_nodes, pred_edges, pred_nodes_box, pred_nodes_box_score, pred_nodes_box_class, pred_edges_box_score, pred_edges_box_class = relation_infer(
+            h.detach(), out, model, config.MODEL.DECODER.OBJ_TOKEN, config.MODEL.DECODER.RLN_TOKEN, map_=True
+        )
+        print("\n train loop nodes edges", len(pred_nodes), len(pred_edges))
 
         # Compute losses
         losses = loss_function(h, out, target, pred_backbone_domains, pred_instance_domains)

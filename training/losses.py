@@ -1,4 +1,5 @@
 import enum
+from functools import reduce
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -269,8 +270,8 @@ class SetCriterion(nn.Module):
         edge_labels = torch.cat(edge_labels, 0).to(h.get_device())
         relation_pred = self.net.relation_embed(relation_feature)
 
-        # valid_edges = torch.argmax(relation_pred, -1)
-        # print('valid_edge number', valid_edges.sum())
+        valid_edges = torch.argmax(relation_pred, -1)
+        print('valid_edge number', valid_edges.sum())
 
         if self.edge_sampling_mode == EDGE_SAMPLING_MODE.UP:
             relation_pred, edge_labels = \
@@ -374,38 +375,63 @@ class SetCriterion(nn.Module):
                 pred_edges.append(node_pairs_valid[pred_rel])
 
             else:
-                pred_edges.append(torch.empty(0,2))
-
-        graphs = []
-        for n, e in zip(target_nodes, target_edges):
-            nodes_ones = torch.ones(n.size(0)).view(-1, 1)
-            graph = Data(
-                    x=nodes_ones.to(h.device),
-                    edge_index=e.t().to(h.device),
-                    pos=n.to(h.device),
-                )
-            graphs.append(graph)
-        
-        pred_graphs = []
-        for n, e in zip(pred_nodes, pred_edges):
-            pred_nodes = n
-            pred_edges = torch.squeeze(torch.tensor(e))
-            pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
-            if  pred_edges.size(0) == 0:
-                pred_edges = torch.empty((0, 2), dtype=torch.int64)
-
-            pred_graph = Data(
-                    x=pred_nodes_ones.to(h.device),
-                    edge_index=pred_edges.t().to(h.device),
-                    pos=n.to(h.device),
-                )
-            pred_graphs.append(pred_graph)
+                pred_edges.append(torch.empty(1,2))
 
         try:
-            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False).tolist()
+            graphs = []
+            for n, e in zip(target_nodes, target_edges):
+                nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
+                graph = Data(
+                        x=nodes_ones.to(h.device),
+                        edge_index=e.t().to(h.device),
+                        pos=n.to(h.device),
+                    )
+                graphs.append(graph)
+            
+            pred_graphs = []
+            for n, e in zip(pred_nodes, pred_edges):
+                e = torch.squeeze(e.clone().detach())
+                # max_edge_index = torch.max(pred_edges)
+                # if max_edge_index > len(n):
+                #     print(max_edge_index)
+                #     raise Exception
+                pred_nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
+                if  e.shape == (2,):
+                    e = torch.empty((0, 2), dtype=torch.int64)
+
+                pred_graph = Data(
+                        x=pred_nodes_ones.to(h.device),
+                        edge_index=e.t().to(h.device),
+                        pos=n.to(h.device),
+                    )
+                pred_graphs.append(pred_graph)
+
+            dummy_graph = Data(
+                x=torch.tensor([[1.],[1.]], dtype=torch.float).to(h.device),
+                edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(h.device),
+                pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(h.device),
+            )
+
+            pred_graphs.append(dummy_graph)
+            graphs.append(dummy_graph)
+            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False).tolist().pop()
         except Exception as e:
-            print(pred_graphs)
-            print(graphs)
+            print('out pred_nodes', len(out['pred_nodes']))
+            print('\n pred_nodes', len(pred_nodes))
+            print('\n pred_graphs', len(pred_graphs), pred_graphs)
+            torch.save(pred_graphs, 'pred_graphs.pt')
+            torch.save(graphs, 'graphs.pt')
+            print('\n graphs', len(graphs), graphs)
+            print(graphs[0].x, graphs[0].edge_index, graphs[0].pos)
+            # e_i = []
+            # for g in pred_graphs:
+            #     e = g.edge_index.shape
+            #     if e in e_i:
+            #         continue
+            #     else:
+            #         e_i.append(e)
+            # print("pred_graphs unique e_i shape", e_i)
+            # print('\n valid_token', len(valid_token), valid_token)
             raise e
         
         return np.mean(ged)
