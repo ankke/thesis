@@ -183,7 +183,6 @@ class SetCriterion(nn.Module):
             box_ops_2D.box_cxcywh_to_xyxy(src_boxes),
             box_ops_2D.box_cxcywh_to_xyxy(target_boxes)))
         loss = loss.sum() / num_boxes
-        # print("boxes loss", loss, loss.grad)
         return loss
 
     def loss_edges(self, h, target_nodes, target_edges, indices):
@@ -286,7 +285,6 @@ class SetCriterion(nn.Module):
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
-        # print("edge loss grad", loss, loss.grad)
         return loss
     
     def loss_domains(self, img_preds, img_labels, instance_preds, instance_labels):
@@ -333,9 +331,6 @@ class SetCriterion(nn.Module):
         pred_nodes = []
         pred_edges = []
 
-        # print(" h shape", h.shape)
-        # print("out", out['pred_logits'].shape, out['pred_logits'])
-        # print("valid_token", valid_token.shape)
         for batch_id in range(h.shape[0]):
             
             # ID of the valid tokens
@@ -379,11 +374,10 @@ class SetCriterion(nn.Module):
                 relation_pred = (relation_pred1+relation_pred2)/2.0
 
                 pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1)
-                # print("node_pairs_valid[pred_rel].grad", node_pairs_valid[pred_rel].grad)
                 pred_edges.append(node_pairs_valid[pred_rel])
 
             else:
-                pred_edges.append(torch.empty(1,2))
+                pred_edges.append(torch.empty(0,2))
 
         try:
             graphs = []
@@ -413,41 +407,16 @@ class SetCriterion(nn.Module):
                         pos=n.to(h.device),
                     )
                 pred_graphs.append(pred_graph)
-
-            # dummy_graph = Data(
-            #     x=torch.tensor([[1.],[1.]], dtype=torch.float).to(h.device),
-            #     edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(h.device),
-            #     pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(h.device),
-            # )
-
-            # pred_graphs.append(dummy_graph)
-            # graphs.append(dummy_graph)
-            # pred_graphs = torch.tensor(pred_graphs).to(h.get_device())
-            # graphs = torch.tensor(graphs).to(h.get_device())
             ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False)
             ged = ged / torch.tensor(graph_elements).to(h.device)
         except Exception as e:
             print('out pred_nodes', len(out['pred_nodes']))
             print('\n pred_nodes', len(pred_nodes))
             print('\n pred_graphs', len(pred_graphs), pred_graphs)
-            # torch.save(pred_graphs, 'pred_graphs.pt')
-            # torch.save(graphs, 'graphs.pt')
             print('\n graphs', len(graphs), graphs)
-            # e_i = []
-            # for g in pred_graphs:
-            #     e = g.edge_index.shape
-            #     if e in e_i:
-            #         continue
-            #     else:
-            #         e_i.append(e)
-            # print("pred_graphs unique e_i shape", e_i)
             print('\n valid_token', len(valid_token), valid_token)
             raise e
         
-        # return torch.mean(ged).sigmoid()
-        # print(torch.mean(ged), torch.mean(ged).grad)
-        # if torch.mean(ged).grad is None:
-        #     raise Exception
         return torch.mean(ged)
 
     def _get_src_permutation_idx(self, indices):
