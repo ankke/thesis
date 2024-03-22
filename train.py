@@ -87,6 +87,7 @@ def main(args):
     torch.backends.cudnn.enabled = True
     torch.multiprocessing.set_sharing_strategy('file_system')
     device = torch.device("cuda") if args.device == 'cuda' else torch.device("cpu")
+    print("running on", device)
 
     # Determine dataset type
     if config.DATA.DATASET == 'road_dataset':
@@ -246,6 +247,14 @@ def main(args):
                     "dataset": config.DATA.DATASET,
                     "exp_name": args.exp_name,
                     "fold": fold,
+                    "loss": config.TRAIN.LOSSES,
+                    "w_box": config.TRAIN.W_BBOX,
+                    "w_class": config.TRAIN.W_CLASS,
+                    "w_card": config.TRAIN.W_CARD,
+                    "w_node": config.TRAIN.W_NODE,
+                    "w_edge": config.TRAIN.W_EDGE,
+                    "w_domain": config.TRAIN.W_DOMAIN,
+                    "w_ged": config.TRAIN.W_GED
                 }
             )
         else:

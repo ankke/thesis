@@ -24,9 +24,8 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
         "edge_loss": 0,
         "box_loss": 0,
         "domain_loss": 0,
-        "total_loss": 0,
+        "total_val": 0,
         "ged": 0,
-        "ged_node": 0,
     }
 
     # Reset similarity metric
@@ -61,7 +60,7 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
         all_results["edge_loss"] += single_losses["edges"]
         all_results["box_loss"] += single_losses["boxes"]
         all_results["domain_loss"] += single_losses["domain"]
-        all_results["total_loss"] += single_losses["total"]
+        all_results["total_val"] += single_losses["total_val"]
 
         # Create graph
         pred_nodes, pred_edges, pred_nodes_box, pred_nodes_box_score, pred_nodes_box_class, pred_edges_box_score, pred_edges_box_class = relation_infer(
@@ -157,10 +156,14 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
 
         graphs = []
         for n, e in zip(nodes, edges):
+            e = torch.tensor(e, dtype=torch.int64)
             nodes_ones = torch.ones(n.size(0)).view(-1, 1)
+            if e.shape == (2,):
+                e = torch.empty((0, 2), dtype=torch.int64)
+
             graph = Data(
-                    x=nodes_ones,
-                    edge_index=e.t(),
+                    x=nodes_ones.to(device),
+                    edge_index=e.t().to(device),
                     pos=n,
                 )
             graphs.append(graph)
@@ -168,19 +171,28 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
         pred_graphs = []
         for n, e in zip(pred_nodes, pred_edges):
             pred_nodes = n
-            pred_edges = torch.squeeze(torch.tensor(e))
+            e = torch.squeeze(torch.tensor(e, dtype=torch.int64))
             pred_nodes_ones = torch.ones(n.size(0)).view(-1, 1)
-            if  pred_edges.size(0) == 0:
-                pred_edges = torch.empty((0, 2), dtype=torch.int64)
+            if e.shape == (2,):
+                e = torch.empty((0, 2), dtype=torch.int64)
 
             pred_graph = Data(
-                    x=pred_nodes_ones,
-                    edge_index=pred_edges.t(),
+                    x=pred_nodes_ones.to(device),
+                    edge_index=e.t().to(device),
                     pos=n,
                 )
             pred_graphs.append(pred_graph)
 
+        dummy_graph = Data(
+                x=torch.tensor([[1.],[1.]], dtype=torch.float).to(device),
+                edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(device),
+                pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(device),
+            )
+
+        pred_graphs.append(dummy_graph)
+        graphs.append(dummy_graph)
         ged = ged_model.predict_inner(pred_graphs, graphs).tolist()
+        ged.pop()
         all_results["ged"] += np.mean(ged)
 
 
@@ -205,7 +217,7 @@ def validate(train_loader, model, loss_function, epoch, device, config, wandb_ru
     all_results["edge_loss"] /= num_iterations
     all_results["box_loss"] /= num_iterations
     all_results["domain_loss"] /= num_iterations
-    all_results["total_loss"] /= num_iterations
+    all_results["total_val"] /= num_iterations
     all_results["ged"] /= num_iterations
 
     return all_results, sample_visuals

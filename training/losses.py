@@ -83,6 +83,7 @@ class SetCriterion(nn.Module):
         self.rln_token = config.MODEL.DECODER.RLN_TOKEN
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
+        self.val_losses = config.TRAIN.VAL_LOSSES
         self.num_edge_samples = num_edge_samples
         self.edge_sampling_mode = edge_sampling_mode
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
@@ -102,7 +103,8 @@ class SetCriterion(nn.Module):
                             'cards':config.TRAIN.W_CARD,
                             'nodes':config.TRAIN.W_NODE,
                             'edges':config.TRAIN.W_EDGE,
-                            'domain':config.TRAIN.W_DOMAIN
+                            'domain':config.TRAIN.W_DOMAIN,
+                            'ged':config.TRAIN.W_GED
                             }
     
         self.ged_model = ged_model
@@ -181,6 +183,7 @@ class SetCriterion(nn.Module):
             box_ops_2D.box_cxcywh_to_xyxy(src_boxes),
             box_ops_2D.box_cxcywh_to_xyxy(target_boxes)))
         loss = loss.sum() / num_boxes
+        # print("boxes loss", loss, loss.grad)
         return loss
 
     def loss_edges(self, h, target_nodes, target_edges, indices):
@@ -271,7 +274,7 @@ class SetCriterion(nn.Module):
         relation_pred = self.net.relation_embed(relation_feature)
 
         valid_edges = torch.argmax(relation_pred, -1)
-        print('valid_edge number', valid_edges.sum())
+        # print('valid_edge number', valid_edges.sum())
 
         if self.edge_sampling_mode == EDGE_SAMPLING_MODE.UP:
             relation_pred, edge_labels = \
@@ -283,6 +286,7 @@ class SetCriterion(nn.Module):
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
+        # print("edge loss grad", loss, loss.grad)
         return loss
     
     def loss_domains(self, img_preds, img_labels, instance_preds, instance_labels):
@@ -323,12 +327,15 @@ class SetCriterion(nn.Module):
             relation_token = h[..., self.obj_token:self.rln_token+self.obj_token, :]
 
         # valid tokens
-        valid_token = torch.argmax(out['pred_logits'], -1).detach()
+        valid_token = torch.argmax(out['pred_logits'], -1)
 
 
         pred_nodes = []
         pred_edges = []
 
+        # print(" h shape", h.shape)
+        # print("out", out['pred_logits'].shape, out['pred_logits'])
+        # print("valid_token", valid_token.shape)
         for batch_id in range(h.shape[0]):
             
             # ID of the valid tokens
@@ -372,6 +379,7 @@ class SetCriterion(nn.Module):
                 relation_pred = (relation_pred1+relation_pred2)/2.0
 
                 pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1)
+                # print("node_pairs_valid[pred_rel].grad", node_pairs_valid[pred_rel].grad)
                 pred_edges.append(node_pairs_valid[pred_rel])
 
             else:
@@ -379,24 +387,24 @@ class SetCriterion(nn.Module):
 
         try:
             graphs = []
+            graph_elements = []
             for n, e in zip(target_nodes, target_edges):
                 nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
+                if e.shape == (2,):
+                    e = torch.empty((0, 2), dtype=torch.int64)
                 graph = Data(
                         x=nodes_ones.to(h.device),
                         edge_index=e.t().to(h.device),
                         pos=n.to(h.device),
                     )
                 graphs.append(graph)
+                graph_elements.append(graph.num_nodes + graph.num_edges)
             
             pred_graphs = []
             for n, e in zip(pred_nodes, pred_edges):
                 e = torch.squeeze(e.clone().detach())
-                # max_edge_index = torch.max(pred_edges)
-                # if max_edge_index > len(n):
-                #     print(max_edge_index)
-                #     raise Exception
                 pred_nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
-                if  e.shape == (2,):
+                if e.shape == (2,):
                     e = torch.empty((0, 2), dtype=torch.int64)
 
                 pred_graph = Data(
@@ -406,23 +414,25 @@ class SetCriterion(nn.Module):
                     )
                 pred_graphs.append(pred_graph)
 
-            dummy_graph = Data(
-                x=torch.tensor([[1.],[1.]], dtype=torch.float).to(h.device),
-                edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(h.device),
-                pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(h.device),
-            )
+            # dummy_graph = Data(
+            #     x=torch.tensor([[1.],[1.]], dtype=torch.float).to(h.device),
+            #     edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(h.device),
+            #     pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(h.device),
+            # )
 
-            pred_graphs.append(dummy_graph)
-            graphs.append(dummy_graph)
-            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False).tolist().pop()
+            # pred_graphs.append(dummy_graph)
+            # graphs.append(dummy_graph)
+            # pred_graphs = torch.tensor(pred_graphs).to(h.get_device())
+            # graphs = torch.tensor(graphs).to(h.get_device())
+            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False)
+            ged = ged / torch.tensor(graph_elements).to(h.device)
         except Exception as e:
             print('out pred_nodes', len(out['pred_nodes']))
             print('\n pred_nodes', len(pred_nodes))
             print('\n pred_graphs', len(pred_graphs), pred_graphs)
-            torch.save(pred_graphs, 'pred_graphs.pt')
-            torch.save(graphs, 'graphs.pt')
+            # torch.save(pred_graphs, 'pred_graphs.pt')
+            # torch.save(graphs, 'graphs.pt')
             print('\n graphs', len(graphs), graphs)
-            print(graphs[0].x, graphs[0].edge_index, graphs[0].pos)
             # e_i = []
             # for g in pred_graphs:
             #     e = g.edge_index.shape
@@ -431,10 +441,14 @@ class SetCriterion(nn.Module):
             #     else:
             #         e_i.append(e)
             # print("pred_graphs unique e_i shape", e_i)
-            # print('\n valid_token', len(valid_token), valid_token)
+            print('\n valid_token', len(valid_token), valid_token)
             raise e
         
-        return np.mean(ged)
+        # return torch.mean(ged).sigmoid()
+        # print(torch.mean(ged), torch.mean(ged).grad)
+        # if torch.mean(ged).grad is None:
+        #     raise Exception
+        return torch.mean(ged)
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -448,7 +462,7 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def forward(self, h, out, target, pred_backbone_domains, pred_instance_domains):
+    def forward(self, h, out, target, pred_backbone_domains, pred_instance_domains, ged=False):
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -466,6 +480,7 @@ class SetCriterion(nn.Module):
         if len(target['nodes']) == 0:
             return {
                 'total':torch.tensor(0).to(h.get_device()),
+                'total_val':torch.tensor(0).to(h.get_device()),
                 'class':torch.tensor(0).to(h.get_device()),
                 'nodes':torch.tensor(0).to(h.get_device()),
                 'boxes':torch.tensor(0).to(h.get_device()),
@@ -489,6 +504,7 @@ class SetCriterion(nn.Module):
         else:
             losses['domain'] = -1
         
-        losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
+        losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses]) / sum(self.weight_dict[key] for key in self.losses)
+        losses['total_val'] = sum([losses[key]*self.weight_dict[key] for key in self.val_losses]) / sum(self.weight_dict[key] for key in self.val_losses)
 
         return losses

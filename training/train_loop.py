@@ -2,8 +2,10 @@ from tqdm import tqdm
 import torch
 import gc
 import numpy as np
+import wandb
 
 from training.inference import relation_infer
+from utils.visualize_sample import create_sample_visual
 
 def train(train_loader, model, optimizer, loss_function, epoch, device, config, wandb_run, similarity_metric):
     model.train()
@@ -32,12 +34,13 @@ def train(train_loader, model, optimizer, loss_function, epoch, device, config, 
         target["interpolated_domains"] = interpolated_domains
 
 
-        pred_nodes, pred_edges, pred_nodes_box, pred_nodes_box_score, pred_nodes_box_class, pred_edges_box_score, pred_edges_box_class = relation_infer(
-            h.detach(), out, model, config.MODEL.DECODER.OBJ_TOKEN, config.MODEL.DECODER.RLN_TOKEN, map_=True
+        pred_nodes, pred_edges = relation_infer(
+            h.detach(), out, model, config.MODEL.DECODER.OBJ_TOKEN, config.MODEL.DECODER.RLN_TOKEN
         )
-        print("\n train loop nodes edges", len(pred_nodes), len(pred_edges))
+        # print("\n train loop nodes edges", pred_nodes, pred_edges)
 
-        # Compute losses
+        # Compute losses]
+        # ged = True if epoch > 10 else False
         losses = loss_function(h, out, target, pred_backbone_domains, pred_instance_domains)
 
         # Backward pass
@@ -47,17 +50,21 @@ def train(train_loader, model, optimizer, loss_function, epoch, device, config, 
         # Add similarity information to metric
         if similarity_metric is not None:
             similarity_metric.update(srcs[-1], domains)
+        
+        sample_visuals = create_sample_visual(images, nodes, edges, pred_nodes, pred_edges)
 
         # Log to wandb
         if wandb_run is not None:
             wandb_run.log({"train": {
-                "node_loss": losses["nodes"],
+                # "node_loss": losses["nodes"],
                 "edge_loss": losses["edges"],
                 "box_loss": losses["boxes"],
-                "domain_loss": losses["domain"],
+                # "domain_loss": losses["domain"],
                 "total_loss": losses["total"],
+                # "ged_loss": losses["ged"],
                 "alpha": alpha,
                 "step": num_iterations*epoch + iteration,
+                "sample_visual": wandb.Image(sample_visuals)
             }})
 
         # Cleanup
