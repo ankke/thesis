@@ -117,10 +117,15 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
         data_dicts = [
             {"img": img_file, "vtp": vtk_file, "seg": seg_file} for img_file, vtk_file, seg_file in zip(img_files, vtk_files, seg_files)
         ]
+
+        if max_samples > 0:
+            data_dicts = data_dicts[:data_dicts]
+
         ds = Sat2GraphDataLoader(
             data=data_dicts,
             augment=True,
-            use_grayscale=use_grayscale
+            use_grayscale=use_grayscale,
+            domain_classification=domain_classification,
         )
         return ds
     elif mode == 'test':
@@ -188,4 +193,4 @@ def build_road_network_data(config, mode='train', split=0.95, max_samples=0, use
             domain_classification=domain_classification,
             augment=False
         )
-        return train_ds, val_ds, None
+        return train_ds, val_ds

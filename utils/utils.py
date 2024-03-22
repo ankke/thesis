@@ -167,6 +167,20 @@ def dict2obj(dict1):
     return json.loads(json.dumps(dict1), object_hook=obj)
 
 def upsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval):
+    """
+    Upsamples the edges in a relation prediction tensor based on the given sample ratio and acceptance interval.
+
+    Args:
+        relation_pred (torch.Tensor): Tensor containing the relation predictions.
+        edge_labels (torch.Tensor): Tensor containing the labels for each edge.
+        sample_ratio (float): The desired ratio of positive edges to negative edges.
+        acceptance_interval (float): The acceptable deviation from the desired sample ratio.
+
+    Returns:
+        torch.Tensor: Tensor containing the upsampled relation predictions.
+        torch.Tensor: Tensor containing the upsampled edge labels.
+    """
+
     target_pos_edges = relation_pred[edge_labels == 1]
     target_neg_edges = relation_pred[edge_labels == 0]
 
@@ -192,3 +206,61 @@ def upsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval
         return relation_pred, edge_labels
 
     return torch.cat((relation_pred, new_edges)), torch.cat((edge_labels, new_labels))
+
+
+def downsample_edges(relation_pred, edge_labels, sample_ratio, acceptance_interval):
+    """
+    Downsamples the edges based on the given sample ratio and acceptance interval.
+
+    Args:
+        relation_pred (torch.Tensor): The predicted relation values.
+        edge_labels (torch.Tensor): The labels for the edges.
+        sample_ratio (float): The desired ratio of positive to negative edges.
+        acceptance_interval (float): The acceptable deviation from the sample ratio.
+
+    Returns:
+        tuple: A tuple containing the downsampled relation predictions and edge labels.
+    """
+    target_pos_edges = relation_pred[edge_labels == 1]
+    target_neg_edges = relation_pred[edge_labels == 0]
+
+    actual_ratio = target_pos_edges.shape[0] / target_neg_edges.shape[0]
+
+    if actual_ratio < sample_ratio - acceptance_interval:
+        # In this case, we have too many negative edges, so we need to remove some
+        target_num = int(target_pos_edges.shape[0] * (1 / sample_ratio))
+
+        target_neg_edges = target_neg_edges[:target_num]
+    elif sample_ratio + acceptance_interval < actual_ratio:
+        # In this case, we have too many positive edges, so we need to remove some
+        target_num = int(target_neg_edges.shape[0] * sample_ratio)
+
+        target_pos_edges = target_pos_edges[:target_num]
+    else:
+        return relation_pred, edge_labels
+    
+    return (
+        torch.cat((target_pos_edges, target_neg_edges)), 
+        torch.cat(
+            (torch.ones(target_pos_edges.shape[0], dtype=torch.long, device=relation_pred.device), 
+             torch.zeros(target_neg_edges.shape[0], dtype=torch.long, device=relation_pred.device)))
+        )
+
+def ensure_format(bboxes):
+    boxes_new = []
+    for bbox in bboxes:
+        if bbox[0] > bbox[2]:
+            bbox[0], bbox[2] = bbox[2], bbox[0]
+        if bbox[1] > bbox[3]:
+            bbox[1], bbox[3] = bbox[3], bbox[1]
+        
+        # to take care of horizontal and vertical edges
+        if bbox[2]-bbox[0]<0.2:
+            bbox[0] = bbox[0]-0.075
+            bbox[2] = bbox[2]+0.075
+        if bbox[3]-bbox[1]<0.2:
+            bbox[1] = bbox[1]-0.075
+            bbox[3] = bbox[3]+0.075
+            
+        boxes_new.append(bbox)
+    return np.array(boxes_new)

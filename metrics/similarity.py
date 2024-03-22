@@ -1,5 +1,5 @@
 """
-Module implementing the CKA metric on a batch level.
+Module implementing various feature representation similarity metrics.
 Adapted from https://colab.research.google.com/github/google-research/google-research/blob/master/representation_similarity/Demo.ipynb#scrollTo=MkucRi3yn7UJ
 """
 
@@ -11,7 +11,6 @@ import numpy as np
 from ignite.exceptions import NotComputableError
 import torch
 
-from sklearn.manifold import TSNE
 
 def gram_linear(x):
   """Compute Gram (kernel) matrix for a linear kernel.
@@ -176,91 +175,13 @@ def batch_cross_product(X, Y):
     Y = np.tile(Y, (X.shape[0] // Y.shape[0], 1))
 
     return X, Y
-
-def dim_reduction(X,Y):
-  """
-  Reduces the dimensionality of X and Y to 2 using the t-SNE algorithm.
-  """
-  tsne_X = TSNE().fit_transform(X)
-  tsne_Y = TSNE().fit_transform(Y)
-  return tsne_X, tsne_Y
-
-class SimilarityMetricTSNE(Metric):
-  """
-  Accumulates a similarity metric over multiple iterations."""
-
-  def __init__(self, output_transform=lambda x:x, device="cpu", similarity_function=batch_cka, base_metric=None):
-    self._source_samples = []
-    self._target_samples = []
-    self.X, self.Y = None, None
-    self.reduced = False
-    self._similarity_function = similarity_function
-    self.device = device
-    if base_metric is not None:
-       self.base_metric = base_metric
-    else:
-       self.base_metric = None
-    super(SimilarityMetricTSNE, self).__init__(output_transform=output_transform, device=device)
-
-  @reinit__is_reduced
-  def reset(self):
-    self.reduced = False
-    if not self.base_metric:
-      
-      
-
-      self._source_samples = []
-      self._target_samples = []
-      super(SimilarityMetricTSNE, self).reset()
-
-  @reinit__is_reduced
-  def update(self, output):
-    self.reduced = False
-    if self.base_metric is None:
-      features, domains = output
-      X = features[-1][domains == 0].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
-      Y = features[-1][domains == 1].clone().permute(0,2,3,1).flatten(start_dim=0, end_dim=2).detach().cpu().numpy()
-      self._source_samples.append(X)
-      self._target_samples.append(Y)
-
-
-  def get_features(self):
-    if self.reduced: 
-      return self.X, self.Y
-    else:
-      X = np.concatenate(self._source_samples, axis=0)
-      Y = np.concatenate(self._target_samples, axis=0)
-
-      X, Y = downsample_examples(X.astype(np.double),Y.astype(np.double))
-      X, Y = dim_reduction(X,Y)
-      X, Y = X.astype(np.float), Y.astype(np.float)
-      self.X, self.Y = X, Y
-      self.reduced = True
-      print("features are preprocessed")
-    return self.X, self.Y
-
-  @sync_all_reduce("_num_examples", "_num_correct:SUM")
-  def compute(self):
-    if self._num_examples == 0:
-      raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
-
-    if self.base_metric is not None:
-      X, Y = self.base_metric.get_features()
-    else:
-      X, Y = self.get_features()
-
-    try:
-      similarity = self._similarity_function(X,Y)
-    except:
-      similarity = np.NaN
-
-    return similarity
   
-class SimilarityMetricPCA(Metric):
+class SimilarityMetricPCA:
   """
-  Accumulates a similarity metric over multiple iterations."""
+  Accumulates a similarity metric over multiple iterations.
+  """
 
-  def __init__(self, output_transform=lambda x:x, device="cpu", similarity_function=batch_cka, base_metric=None, max_datapoints=4*10000):
+  def __init__(self, device="cpu", similarity_function=batch_cka, base_metric=None, max_datapoints=4*10000):
     self._source_batches = []
     self._target_batches = []
     self.X, self.Y = None, None
@@ -274,9 +195,7 @@ class SimilarityMetricPCA(Metric):
        self.base_metric = base_metric
     else:
        self.base_metric = None
-    super(SimilarityMetricPCA, self).__init__(output_transform=output_transform, device=device)
-
-  @reinit__is_reduced
+    
   def reset(self):
     self.computed = False
     if not self.base_metric:
@@ -289,12 +208,9 @@ class SimilarityMetricPCA(Metric):
       self._target_batches = []
       self.num_source_datapoints = 0
       self.num_target_datapoints = 0
-      super(SimilarityMetricPCA, self).reset()
 
-  @reinit__is_reduced
-  def update(self, output):
+  def update(self, features, domains):
     self.computed = False
-    features, domains = output
 
     if self.base_metric is None:
       if self.num_source_datapoints < self.max_datapoints:
@@ -334,11 +250,7 @@ class SimilarityMetricPCA(Metric):
       self.computed = True
     return self.X, self.Y
 
-  @sync_all_reduce("_num_examples", "_num_correct:SUM")
   def compute(self):
-    if self._num_examples == 0:
-      raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
-
     if self.base_metric is not None:
       X, Y = self.base_metric.get_features()
     else:
@@ -350,24 +262,3 @@ class SimilarityMetricPCA(Metric):
       similarity = np.NaN
 
     return similarity
-  
-def create_feature_representation_visual(similarity_measure):
-  """
-  Creates a visual of the feature representation of the source and target domain using t-SNE.
-  """
-  X, Y = similarity_measure.get_features()
-  X = TSNE().fit_transform(np.ascontiguousarray(X.astype(np.double)))
-  Y = TSNE().fit_transform(np.ascontiguousarray(Y.astype(np.double)))
-
-  # Plot X and Y in different colors on a single plot and return the image for the tensorboard handler
-  fig, ax = plt.subplots()
-  ax.scatter(X[:,0], X[:,1], c="red", label="source", alpha=0.3)
-  ax.scatter(Y[:,0], Y[:,1], c="blue", label="target", alpha=0.3)
-  ax.legend()
-  fig.canvas.draw()
-  data_2 = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).copy()
-  data_2 = data_2.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-  plt.close(fig)
-
-  res = np.expand_dims(np.transpose(data_2, (2, 0, 1)), axis=0)
-  return res

@@ -1,0 +1,39 @@
+[W 04:43:00.675 NotebookApp] Error loading server extension jupyterlab
+    Traceback (most recent call last):
+      File "/home/anna_alex/env/rf/lib/python3.10/site-packages/notebook/notebookapp.py", line 2025, in init_server_extensions
+        mod = importlib.import_module(modulename)
+      File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+        return _bootstrap._gcd_import(name[level:], package, level)
+      File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+      File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+      File "<frozen importlib._bootstrap>", line 1004, in _find_and_load_unlocked
+    ModuleNotFoundError: No module named 'jupyterlab'
+[I 04:43:00.677 NotebookApp] Serving notebooks from local directory: /home/anna_alex/relationformer
+[I 04:43:00.677 NotebookApp] Jupyter Notebook 6.4.12 is running at:
+[I 04:43:00.677 NotebookApp] http://localhost:1234/?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa
+[I 04:43:00.677 NotebookApp]  or http://127.0.0.1:1234/?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa
+[I 04:43:00.677 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 04:43:00.679 NotebookApp] 
+    
+    To access the notebook, open this file in a browser:
+        file:///home/anna_alex/.local/share/jupyter/runtime/nbserver-4080-open.html
+    Or copy and paste one of these URLs:
+        http://localhost:1234/?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa
+     or http://127.0.0.1:1234/?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa
+[I 04:43:27.729 NotebookApp] 302 GET /?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa (::1) 0.400000ms
+[I 04:43:39.483 NotebookApp] Kernel started: d058055f-ba30-4516-8a58-4b8e4520a54a, name: greed
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+[I 04:45:44.490 NotebookApp] Saving file at /[new pyged] data generation.ipynb
+[I 04:47:44.407 NotebookApp] Saving file at /[new pyged] data generation.ipynb
+[I 04:49:43.545 NotebookApp] Saving file at /[new pyged] data generation.ipynb
+[I 04:53:42.639 NotebookApp] Saving file at /[new pyged] data generation.ipynb
+[W 04:57:39.946 NotebookApp] WebSocket ping timeout after 119964 ms.
+[I 04:57:44.950 NotebookApp] Starting buffering for d058055f-ba30-4516-8a58-4b8e4520a54a:4e5e373fcd8547c78f07c3398ab847da
+[I 11:08:25.604 NotebookApp] 302 GET /?token=944b59e3784b916200f087bc9a6efd525153f1ab4603b7fa (::1) 0.290000ms
+[C 16:52:43.366 NotebookApp] received signal 15, stopping
+[I 16:52:43.366 NotebookApp] Shutting down 1 kernel
+[I 16:52:43.367 NotebookApp] Kernel shutdown: d058055f-ba30-4516-8a58-4b8e4520a54a
+[I 16:52:43.479 NotebookApp] Shutting down 0 terminals

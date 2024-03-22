@@ -22,8 +22,6 @@ from typing import Dict, List
 from .utils import NestedTensor, is_main_process
 from .position_encoding_2D import build_position_encoding
 
-torch.backends.cudnn.enabled = True  # Enable cuDNN
-torch.backends.cudnn.benchmark = True
 
 class FrozenBatchNorm2d(torch.nn.Module):
     """

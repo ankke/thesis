@@ -1,10 +1,20 @@
+import enum
+from functools import reduce
 import torch
 import torch.nn.functional as F
 from torch import nn
 import pdb
+import itertools
 from utils import box_ops_2D
 import numpy as np
-from utils.utils import upsample_edges
+from utils.utils import downsample_edges, upsample_edges
+from torch_geometric.data import Data
+
+class EDGE_SAMPLING_MODE(enum.Enum):
+    NONE = "none"
+    UP = "up"
+    DOWN = "down"
+
 
 def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):
     """
@@ -58,7 +68,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, config, matcher, net, num_edge_samples=80, edge_upsampling=False, domain_class_weight=None):
+    def __init__(self, config, matcher, net, ged_model, num_edge_samples=80, edge_sampling_mode=EDGE_SAMPLING_MODE.NONE, domain_class_weight=None):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -73,8 +83,9 @@ class SetCriterion(nn.Module):
         self.rln_token = config.MODEL.DECODER.RLN_TOKEN
         self.obj_token = config.MODEL.DECODER.OBJ_TOKEN
         self.losses = config.TRAIN.LOSSES
+        self.val_losses = config.TRAIN.VAL_LOSSES
         self.num_edge_samples = num_edge_samples
-        self.edge_upsampling = edge_upsampling
+        self.edge_sampling_mode = edge_sampling_mode
         self.sample_ratio = config.TRAIN.EDGE_SAMPLE_RATIO
         self.sample_ratio_interval = config.TRAIN.EDGE_SAMPLE_RATIO_INTERVAL
         if config.DATA.MIXED:
@@ -92,8 +103,11 @@ class SetCriterion(nn.Module):
                             'cards':config.TRAIN.W_CARD,
                             'nodes':config.TRAIN.W_NODE,
                             'edges':config.TRAIN.W_EDGE,
-                            'domain':config.TRAIN.W_DOMAIN
+                            'domain':config.TRAIN.W_DOMAIN,
+                            'ged':config.TRAIN.W_GED
                             }
+    
+        self.ged_model = ged_model
         
     def loss_class(self, outputs, indices):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -217,7 +231,7 @@ class SetCriterion(nn.Module):
             pos_edge[shuffle,:] = to_shuffle[:,[1, 0]]
 
             # restrict unbalance in the +ve/-ve edge
-            if pos_edge.shape[0]>40:
+            if self.edge_sampling_mode == EDGE_SAMPLING_MODE.NONE and pos_edge.shape[0]>40:
                 # print('Reshaping')
                 pos_edge = pos_edge[:40,:]
 
@@ -258,12 +272,16 @@ class SetCriterion(nn.Module):
         edge_labels = torch.cat(edge_labels, 0).to(h.get_device())
         relation_pred = self.net.relation_embed(relation_feature)
 
-        # valid_edges = torch.argmax(relation_pred, -1)
+        valid_edges = torch.argmax(relation_pred, -1)
         # print('valid_edge number', valid_edges.sum())
 
-        if self.edge_upsampling:
+        if self.edge_sampling_mode == EDGE_SAMPLING_MODE.UP:
             relation_pred, edge_labels = \
                 upsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
+        elif self.edge_sampling_mode == EDGE_SAMPLING_MODE.DOWN:
+            relation_pred, edge_labels = \
+                downsample_edges(relation_pred, edge_labels, self.sample_ratio, self.sample_ratio_interval)
+
 
         loss = F.cross_entropy(relation_pred, edge_labels, reduction='mean')
 
@@ -299,6 +317,108 @@ class SetCriterion(nn.Module):
 
         return domain_loss
 
+    def loss_ged(self, h, out, target_nodes, target_edges):
+        object_token = h[...,:self.obj_token,:]
+
+        # last token is relation token
+        if self.rln_token > 0:
+            relation_token = h[..., self.obj_token:self.rln_token+self.obj_token, :]
+
+        # valid tokens
+        valid_token = torch.argmax(out['pred_logits'], -1)
+
+
+        pred_nodes = []
+        pred_edges = []
+
+        for batch_id in range(h.shape[0]):
+            
+            # ID of the valid tokens
+            node_id = torch.nonzero(valid_token[batch_id]).squeeze(1)
+            
+            # coordinates of the valid tokens
+            pred_nodes.append(out['pred_nodes'][batch_id, node_id, :2])
+
+            if node_id.dim() !=0 and node_id.nelement() != 0 and node_id.shape[0]>1:
+                
+                # all possible node pairs in all token ordering
+                node_pairs = [list(i) for i in list(itertools.combinations(list(node_id),2))]
+                node_pairs = list(map(list, zip(*node_pairs)))
+                
+                # node pairs in valid token order
+                node_pairs_valid = torch.tensor([list(i) for i in list(itertools.combinations(list(range(len(node_id))),2))]).to(h.device)
+
+                # concatenate valid object pairs relation feature
+                if self.rln_token>0:
+                    relation_feature1  = torch.cat(
+                        (
+                            object_token[batch_id,node_pairs[0],:],
+                            object_token[batch_id,node_pairs[1],:],
+                            torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)
+                        ),
+                        1
+                    )
+                    relation_feature2  = torch.cat(
+                        (
+                            object_token[batch_id,node_pairs[1],:],
+                            object_token[batch_id,node_pairs[0],:],
+                            torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)),
+                        1
+                    )
+                else:
+                    relation_feature1  = torch.cat((object_token[batch_id,node_pairs[0],:], object_token[batch_id,node_pairs[1],:]), 1)
+                    relation_feature2  = torch.cat((object_token[batch_id,node_pairs[1],:], object_token[batch_id,node_pairs[0],:]), 1)
+
+                relation_pred1 = self.net.relation_embed(relation_feature1)
+                relation_pred2 = self.net.relation_embed(relation_feature2)
+                relation_pred = (relation_pred1+relation_pred2)/2.0
+
+                pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1)
+                pred_edges.append(node_pairs_valid[pred_rel])
+
+            else:
+                pred_edges.append(torch.empty(0,2))
+
+        try:
+            graphs = []
+            graph_elements = []
+            for n, e in zip(target_nodes, target_edges):
+                nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
+                if e.shape == (2,):
+                    e = torch.empty((0, 2), dtype=torch.int64)
+                graph = Data(
+                        x=nodes_ones.to(h.device),
+                        edge_index=e.t().to(h.device),
+                        pos=n.to(h.device),
+                    )
+                graphs.append(graph)
+                graph_elements.append(graph.num_nodes + graph.num_edges)
+            
+            pred_graphs = []
+            for n, e in zip(pred_nodes, pred_edges):
+                e = torch.squeeze(e.clone().detach())
+                pred_nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
+                if e.shape == (2,):
+                    e = torch.empty((0, 2), dtype=torch.int64)
+
+                pred_graph = Data(
+                        x=pred_nodes_ones.to(h.device),
+                        edge_index=e.t().to(h.device),
+                        pos=n.to(h.device),
+                    )
+                pred_graphs.append(pred_graph)
+            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False)
+            ged = ged / torch.tensor(graph_elements).to(h.device)
+        except Exception as e:
+            print('out pred_nodes', len(out['pred_nodes']))
+            print('\n pred_nodes', len(pred_nodes))
+            print('\n pred_graphs', len(pred_graphs), pred_graphs)
+            print('\n graphs', len(graphs), graphs)
+            print('\n valid_token', len(valid_token), valid_token)
+            raise e
+        
+        return torch.mean(ged)
+
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
@@ -311,7 +431,7 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def forward(self, h, out, target, pred_backbone_domains, pred_instance_domains):
+    def forward(self, h, out, target, pred_backbone_domains, pred_instance_domains, ged=False):
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -329,6 +449,7 @@ class SetCriterion(nn.Module):
         if len(target['nodes']) == 0:
             return {
                 'total':torch.tensor(0).to(h.get_device()),
+                'total_val':torch.tensor(0).to(h.get_device()),
                 'class':torch.tensor(0).to(h.get_device()),
                 'nodes':torch.tensor(0).to(h.get_device()),
                 'boxes':torch.tensor(0).to(h.get_device()),
@@ -346,11 +467,13 @@ class SetCriterion(nn.Module):
         losses['boxes'] = self.loss_boxes(out['pred_nodes'], target['nodes'], indices)
         losses['edges'] = self.loss_edges(h, target['nodes'], target['edges'], indices)
         losses['cards'] = self.loss_cardinality(out['pred_logits'], indices)
+        losses['ged'] = self.loss_ged(h, out, target['nodes'], target['edges'])
         if self.domain_img_loss:
             losses['domain'] = self.loss_domains(pred_backbone_domains, target['interpolated_domains'], pred_instance_domains, target['domains'])
         else:
             losses['domain'] = -1
         
-        losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses])
+        losses['total'] = sum([losses[key]*self.weight_dict[key] for key in self.losses]) / sum(self.weight_dict[key] for key in self.losses)
+        losses['total_val'] = sum([losses[key]*self.weight_dict[key] for key in self.val_losses]) / sum(self.weight_dict[key] for key in self.val_losses)
 
         return losses

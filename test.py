@@ -33,25 +33,6 @@ class obj:
 def dict2obj(dict1):
     return json.loads(json.dumps(dict1), object_hook=obj)
 
-def ensure_format(bboxes):
-    boxes_new = []
-    for bbox in bboxes:
-        if bbox[0] > bbox[2]:
-            bbox[0], bbox[2] = bbox[2], bbox[0]
-        if bbox[1] > bbox[3]:
-            bbox[1], bbox[3] = bbox[3], bbox[1]
-        
-        # to take care of horizontal and vertical edges
-        if bbox[2]-bbox[0]<0.2:
-            bbox[0] = bbox[0]-0.075
-            bbox[2] = bbox[2]+0.075
-        if bbox[3]-bbox[1]<0.2:
-            bbox[1] = bbox[1]-0.075
-            bbox[3] = bbox[3]+0.075
-            
-        boxes_new.append(bbox)
-    return np.array(boxes_new)
-
 def test(args):
     
     # Load the config files
