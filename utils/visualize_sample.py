@@ -17,7 +17,7 @@ def draw_graph(nodes, edges, ax):
     for edge in edges:
         ax.plot([ys[edge[0]], ys[edge[1]]], [xs[edge[0]], xs[edge[1]]], color="black")
 
-def create_sample_visual(images, nodes, edges, pred_nodes, pred_edges, number_samples=10):
+def create_sample_visual(images, nodes, edges, pred_nodes, pred_edges, number_samples=2):
     px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
     number_samples = min(number_samples, len(images))
     fig, axs = plt.subplots(number_samples, 3, figsize=(1000 * px, number_samples * 300 * px))

@@ -319,137 +319,134 @@ class SetCriterion(nn.Module):
 
         return domain_loss
 
-    def loss_ged(self, h, out, target_nodes, target_edges):
-        object_token = h[...,:self.obj_token,:]
+    def construct_graphs(self, target_nodes, target_edges, pred_nodes, pred_edges, device):
+        """
+        Constructs graph objects from target and predicted nodes/edges.
+        Args:
+            target_nodes (List[Tensor]): List of tensors representing nodes for each graph in the target.
+            target_edges (List[Tensor]): List of tensors representing edges for each graph in the target.
+            pred_nodes (List[Tensor]): List of tensors representing nodes for each graph in the predictions.
+            pred_edges (List[Tensor]): List of tensors representing edges for each graph in the predictions.
+            device (torch.device): The device tensors are on.
+        Returns:
+            Tuple (List[Data], List[Data], List[int]): Returns two lists containing the target and predicted graph objects,
+            and a list of graph elements for normalization purposes.
+        """
 
-        # last token is relation token
+        graphs = []
+        pred_graphs = []
+        graph_elements = []
+
+        # Construct target graphs
+        for n, e in zip(target_nodes, target_edges):
+            nodes_feature = torch.ones((n.size(0), 1), device=device).view(-1, 1)
+            if e.shape == (2,):
+                e = torch.empty((0, 2), dtype=torch.long, device=device)
+            graph = Data(x=nodes_feature, edge_index=e.t().contiguous(), pos=n)
+            graphs.append(graph)
+            graph_elements.append(graph.num_nodes + graph.num_edges)
+
+        # Construct predicted graphs
+        for n, e in zip(pred_nodes, pred_edges):
+            pred_nodes_feature = torch.ones((n.size(0), 1), device=device).view(-1, 1)
+            if e.shape == (2,):
+                e = torch.empty((0, 2), dtype=torch.long, device=device)
+            pred_graph = Data(x=pred_nodes_feature, edge_index=e.t().contiguous(), pos=n)
+            pred_graphs.append(pred_graph)
+
+        return graphs, pred_graphs, graph_elements
+    
+
+    def process_batch_edges(self, node_id, batch_id, object_token, relation_token):
+        pred_edges_batch = []
+
+        if node_id.dim() != 0 and node_id.nelement() != 0 and node_id.shape[0] > 1:
+            # Generating all possible node pairs
+            num_nodes = len(node_id)
+            # correct
+            all_pairs = torch.combinations(node_id, 2).t()
+
+            # Generating node pairs in valid token
+            # correct
+            node_pairs_valid = torch.combinations(torch.arange(num_nodes, device=node_id.device), 2)
+
+            if self.rln_token>0:
+                feature_1  = torch.cat(
+                    (
+                        object_token[batch_id, all_pairs[0],:],
+                        object_token[batch_id, all_pairs[1],:],
+                        torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)
+                    ),
+                    1
+                )
+                feature_2  = torch.cat(
+                    (
+                        object_token[batch_id, all_pairs[1],:],
+                        object_token[batch_id, all_pairs[0],:],
+                        torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)),
+                    1
+                )
+            else:
+                feature_1  = torch.cat((object_token[batch_id, all_pairs[0],:], object_token[batch_id, all_pairs[1],:]), 1)
+                feature_2  = torch.cat((object_token[batch_id, all_pairs[1],:], object_token[batch_id, all_pairs[0],:]), 1)
+
+
+            relation_features = torch.stack([feature_1, feature_2])
+
+            relation_pred = self.net.relation_embed(relation_features).mean(dim=0).softmax(-1)
+            print("loss", "relation_pred.shape, relation_pred", relation_pred.shape, relation_pred)
+            pred_rel = (relation_pred > 0.5).nonzero(as_tuple=True)[0]
+
+            relation_pred_raw = self.net.relation_embed(relation_features).mean(dim=0)
+
+            relation_pred = relation_pred_raw.clone()
+            relation_pred[relation_pred[:, 1] > relation_pred[:, 0], 1] = 1
+            relation_pred[relation_pred[:, 1] <= relation_pred[:, 0], 1] = 0
+            pred_rel_2 = relation_pred[:,1]  
+            print(pred_rel, pred_rel_2)    
+
+            # print("loss", "pred_rel.shape, pred_rel", pred_rel.shape, pred_rel)
+
+            pred_edges_batch = node_pairs_valid[pred_rel]
+
+        else:
+            pred_edges_batch = torch.empty((0, 2), dtype=torch.long, device=object_token.device)
+
+        return pred_edges_batch
+
+
+    def loss_ged(self, h, out, target_nodes, target_edges):
+        # Extract object token from h
+        object_token = h[..., :self.obj_token, :] 
+
+        # Extract relation token from h
+        relation_token = None
         if self.rln_token > 0:
             relation_token = h[..., self.obj_token:self.rln_token+self.obj_token, :]
 
-        # valid tokens
-        valid_token = torch.argmax(out['pred_logits'], -1)
-
+        # valid objects classified as nodes
+        valid_token = torch.argmax(out['pred_logits'], -1) 
 
         pred_nodes = []
         pred_edges = []
 
-        # print(" h shape", h.shape)
-        # print("out", out['pred_logits'].shape, out['pred_logits'])
-        # print("valid_token", valid_token.shape)
         for batch_id in range(h.shape[0]):
-            
-            # ID of the valid tokens
-            node_id = torch.nonzero(valid_token[batch_id]).squeeze(1)
-            
-            # coordinates of the valid tokens
+            # correct
+            node_id = torch.nonzero(valid_token[batch_id], as_tuple=False).squeeze(1)
             pred_nodes.append(out['pred_nodes'][batch_id, node_id, :2])
 
-            if node_id.dim() !=0 and node_id.nelement() != 0 and node_id.shape[0]>1:
-                
-                # all possible node pairs in all token ordering
-                node_pairs = [list(i) for i in list(itertools.combinations(list(node_id),2))]
-                node_pairs = list(map(list, zip(*node_pairs)))
-                
-                # node pairs in valid token order
-                node_pairs_valid = torch.tensor([list(i) for i in list(itertools.combinations(list(range(len(node_id))),2))]).to(h.device)
+            pred_edges_batch = self.process_batch_edges(node_id, batch_id, object_token, relation_token)
+            pred_edges.append(pred_edges_batch)
 
-                # concatenate valid object pairs relation feature
-                if self.rln_token>0:
-                    relation_feature1  = torch.cat(
-                        (
-                            object_token[batch_id,node_pairs[0],:],
-                            object_token[batch_id,node_pairs[1],:],
-                            torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)
-                        ),
-                        1
-                    )
-                    relation_feature2  = torch.cat(
-                        (
-                            object_token[batch_id,node_pairs[1],:],
-                            object_token[batch_id,node_pairs[0],:],
-                            torch.flatten(relation_token[batch_id,...]).repeat(len(node_pairs_valid),1)),
-                        1
-                    )
-                else:
-                    relation_feature1  = torch.cat((object_token[batch_id,node_pairs[0],:], object_token[batch_id,node_pairs[1],:]), 1)
-                    relation_feature2  = torch.cat((object_token[batch_id,node_pairs[1],:], object_token[batch_id,node_pairs[0],:]), 1)
+        # Construct graphs from target and predicted nodes/edges
+        graphs, pred_graphs, graph_elements = self.construct_graphs(target_nodes, target_edges, pred_nodes, pred_edges, h.device)
 
-                relation_pred1 = self.net.relation_embed(relation_feature1)
-                relation_pred2 = self.net.relation_embed(relation_feature2)
-                relation_pred = (relation_pred1+relation_pred2)/2.0
+        ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False)
+        ged = ged / torch.tensor(graph_elements, device=h.device, dtype=ged.dtype)
 
-                pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1)
-                # print("node_pairs_valid[pred_rel].grad", node_pairs_valid[pred_rel].grad)
-                pred_edges.append(node_pairs_valid[pred_rel])
+        return torch.mean(ged) 
 
-            else:
-                pred_edges.append(torch.empty(1,2))
-
-        try:
-            graphs = []
-            graph_elements = []
-            for n, e in zip(target_nodes, target_edges):
-                nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
-                if e.shape == (2,):
-                    e = torch.empty((0, 2), dtype=torch.int64)
-                graph = Data(
-                        x=nodes_ones.to(h.device),
-                        edge_index=e.t().to(h.device),
-                        pos=n.to(h.device),
-                    )
-                graphs.append(graph)
-                graph_elements.append(graph.num_nodes + graph.num_edges)
-            
-            pred_graphs = []
-            for n, e in zip(pred_nodes, pred_edges):
-                e = torch.squeeze(e.clone().detach())
-                pred_nodes_ones = torch.ones((n.size(0), 1)).view(-1, 1)
-                if e.shape == (2,):
-                    e = torch.empty((0, 2), dtype=torch.int64)
-
-                pred_graph = Data(
-                        x=pred_nodes_ones.to(h.device),
-                        edge_index=e.t().to(h.device),
-                        pos=n.to(h.device),
-                    )
-                pred_graphs.append(pred_graph)
-
-            # dummy_graph = Data(
-            #     x=torch.tensor([[1.],[1.]], dtype=torch.float).to(h.device),
-            #     edge_index=torch.tensor([[0], [1]], dtype=torch.long).to(h.device),
-            #     pos=torch.tensor([[0.3, 0.2], [0.8, 0.6]]).to(h.device),
-            # )
-
-            # pred_graphs.append(dummy_graph)
-            # graphs.append(dummy_graph)
-            # pred_graphs = torch.tensor(pred_graphs).to(h.get_device())
-            # graphs = torch.tensor(graphs).to(h.get_device())
-            ged = self.ged_model.predict_inner(pred_graphs, graphs, no_grad=False)
-            ged = ged / torch.tensor(graph_elements).to(h.device)
-        except Exception as e:
-            print('out pred_nodes', len(out['pred_nodes']))
-            print('\n pred_nodes', len(pred_nodes))
-            print('\n pred_graphs', len(pred_graphs), pred_graphs)
-            # torch.save(pred_graphs, 'pred_graphs.pt')
-            # torch.save(graphs, 'graphs.pt')
-            print('\n graphs', len(graphs), graphs)
-            # e_i = []
-            # for g in pred_graphs:
-            #     e = g.edge_index.shape
-            #     if e in e_i:
-            #         continue
-            #     else:
-            #         e_i.append(e)
-            # print("pred_graphs unique e_i shape", e_i)
-            print('\n valid_token', len(valid_token), valid_token)
-            raise e
-        
-        # return torch.mean(ged).sigmoid()
-        # print(torch.mean(ged), torch.mean(ged).grad)
-        # if torch.mean(ged).grad is None:
-        #     raise Exception
-        return torch.mean(ged)
-
+    
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])

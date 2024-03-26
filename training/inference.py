@@ -92,8 +92,16 @@ def relation_infer(h, out, model, obj_token, rln_token, nms=False, map_=False):
             relation_pred1 = model.relation_embed(relation_feature1).detach()
             relation_pred2 = model.relation_embed(relation_feature2).detach()
             relation_pred = (relation_pred1+relation_pred2)/2.0
+            # relation_pred_2 = relation_pred.softmax(-1)
+            # print("inference relation_pred", relation_pred)
+            # print("inference relation_pred2", relation_pred_2)
 
-            pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1).cpu().numpy()
+
+            # takes arg max from classes (the most probable class) but filters by non-zero bc 0 means no-relation
+            pred_rel = torch.nonzero(torch.argmax(relation_pred, -1)).squeeze(1).cpu().numpy() 
+            # pred_rel_2 = (relation_pred_2 > 0.5).nonzero(as_tuple=True)[0].cpu().numpy() 
+            # print("inference pred_rel = pred_rel_2", pred_rel == pred_rel_2)
+            # print("inference pred_rel, pred_rel_2", len(pred_rel), pred_rel, len(pred_rel_2), pred_rel_2)
             pred_edges.append(node_pairs_valid[pred_rel].cpu().numpy())
 
             if map_:
